@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Assam Sewa Setu | Citizen Services</title>
+    <style>
+      :root { font-family: Arial, Helvetica, sans-serif; color: #233044; background: #f5f7f9; --navy: #073b67; --blue: #075e9b; --red: #b3262d; --gold: #e0a629; --line: #cbd5df; }
+      * { box-sizing: border-box; } body { margin: 0; background: #f5f7f9; } button, input, select, textarea { font: inherit; }
+      .gov-strip { height: 7px; background: linear-gradient(90deg, #f3b52b 0 33%, #fff 33% 66%, #4f9b59 66%); }
+      .utility { background: #f0f3f6; border-bottom: 1px solid #d6dee6; color: #44566a; font-size: 12px; }.utility-inner, .header-inner, main, footer { width: min(1120px, calc(100% - 36px)); margin: auto; }.utility-inner { display: flex; justify-content: space-between; padding: 8px 0; }.utility a { color: #124e7c; margin-left: 18px; text-decoration: none; }
+      header { background: linear-gradient(110deg, #0879bd, #07518e); border-bottom: 1px solid #064472; }      .header-inner { display: flex; align-items: center; justify-content: space-between; min-height: 92px; gap: 20px; }.identity { display: flex; align-items: center; gap: 14px; }.emblem { width: 58px; height: 58px; display: block; object-fit: contain; border-radius: 50%; background: transparent; filter: brightness(0) invert(1); }.identity strong, .identity small { display: block; }.identity strong { color: white; font-size: 20px; letter-spacing: .3px; }.identity small { margin-top: 5px; color: #d7ecfb; font-size: 12px; }.assam-mark { color: #e1f2ff; font-size: 12px; font-weight: bold; text-align: right; line-height: 1.5; }.assam-mark b { display: block; color: white; font-size: 16px; }
+      .partner-logos { position: relative; display: flex; align-items: center; gap: 8px; margin: 0; padding: 5px; border: 1px solid #ffffff44; background: #ffffff12; }.partner-logos img { display: block; height: 43px; width: auto; object-fit: contain; background: white; }.partner-logos img:nth-child(2) { width: 49px; }.partner-logos img:nth-child(3) { width: 50px; }.partner-logos figcaption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
+      nav { background: #064574; box-shadow: 0 2px 6px #002b4b33; } nav .nav-inner { width: min(1120px, calc(100% - 36px)); margin: auto; display: flex; gap: 0; } nav a { padding: 13px 20px; color: white; border-right: 1px solid #ffffff22; font-size: 13px; text-decoration: none; } nav a:first-child, nav a:hover { background: #087cbd; }
+      .service-hero { position: relative; overflow: hidden; min-height: 158px; margin: 22px 0 0; padding: 27px 32px; border-radius: 3px; background: linear-gradient(105deg, #075a98, #1595c7); color: white; box-shadow: 0 4px 12px #16456522; }.service-hero::after { content: ""; position: absolute; right: -40px; top: -90px; width: 320px; height: 320px; border: 28px solid #ffffff18; border-radius: 50%; }.service-hero > * { position: relative; z-index: 1; }.service-hero h1 { max-width: 680px; margin: 0; font-size: 28px; font-weight: 600; }.service-hero p { max-width: 620px; margin: 9px 0 0; color: #e3f3ff; font-size: 13px; line-height: 1.5; }.hero-meta { position: absolute; right: 28px; bottom: 20px; display: flex; gap: 8px; }.hero-meta span { padding: 7px 10px; border: 1px solid #ffffff55; border-radius: 3px; background: #003e6e55; font-size: 11px; }
+      .breadcrumb { padding: 20px 0 14px; color: #637487; font-size: 12px; }.breadcrumb a { color: var(--blue); }.breadcrumb span { margin: 0 8px; }
+      .heading { padding: 8px 0 24px; }.heading h1 { margin: 0; color: var(--navy); font-size: 32px; font-weight: 600; }.heading p { max-width: 700px; margin: 8px 0 0; color: #596b7d; font-size: 14px; line-height: 1.5; }
+      .layout { display: grid; grid-template-columns: 260px 1fr; gap: 24px; align-items: start; padding-bottom: 42px; }.steps, .form-card { border: 1px solid var(--line); background: white; box-shadow: 0 2px 6px #1635520b; }.steps { border-top: 4px solid var(--gold); }.steps h2 { margin: 0; padding: 17px 18px; color: var(--navy); border-bottom: 1px solid #e0e6eb; font-size: 16px; }.steps ol { margin: 0; padding: 16px 17px; list-style: none; }.steps li { position: relative; display: flex; gap: 10px; min-height: 57px; }.steps li:not(:last-child)::after { content: ""; position: absolute; top: 29px; left: 13px; height: 42px; border-left: 1px solid #c9d4df; }.steps li > span { z-index: 1; width: 28px; height: 28px; display: grid; flex: 0 0 auto; place-items: center; border: 1px solid #aebdcb; border-radius: 50%; background: white; color: #687889; font-size: 12px; font-weight: bold; }.steps li.active > span { border-color: var(--blue); background: var(--blue); color: white; }.steps li strong, .steps li small { display: block; }.steps li strong { margin-top: 4px; color: #30455a; font-size: 13px; }.steps li small { margin-top: 4px; color: #718193; font-size: 11px; }.help { margin: 4px 17px 17px; padding: 14px 0 0; border-top: 1px solid #e0e6eb; color: #607286; font-size: 11px; line-height: 1.5; }.help b { color: var(--navy); }
+      .form-card { border-top: 4px solid var(--navy); padding: 26px; }.form-title { display: flex; justify-content: space-between; gap: 20px; padding-bottom: 17px; border-bottom: 1px solid #e0e6eb; }.form-title h2 { margin: 0; color: var(--navy); font-size: 22px; font-weight: 600; }.form-title p { margin: 6px 0 0; color: #68798a; font-size: 12px; }.required { color: var(--red); font-size: 11px; }
+      form { display: grid; grid-template-columns: 1fr 1fr; gap: 17px; }.field { display: flex; flex-direction: column; gap: 7px; }.wide { grid-column: 1 / -1; }.field label, legend { color: #35495e; font-size: 13px; font-weight: bold; }.field label span, legend span { color: var(--red); }.field small { min-height: 13px; color: #6a7b8c; font-size: 11px; }.field input, .field select, .field textarea { width: 100%; padding: 11px 12px; border: 1px solid #aebdcb; border-radius: 3px; background: white; color: #26394d; font-size: 13px; outline: 0; }.field textarea { resize: vertical; }.field input:focus, .field select:focus, .field textarea:focus { border-color: var(--blue); box-shadow: 0 0 0 3px #075e9b22; }fieldset { border: 1px solid #aebdcb; padding: 12px; }.options { display: flex; flex-wrap: wrap; gap: 18px; }.options label, .checkline { color: #46596c; font-size: 12px; font-weight: normal; }.options input, .checkline input { accent-color: var(--blue); }
+      .actions { display: flex; justify-content: flex-end; gap: 10px; grid-column: 1 / -1; margin-top: 5px; padding-top: 20px; border-top: 1px solid #e0e6eb; }.btn { padding: 10px 17px; border: 1px solid; border-radius: 3px; cursor: pointer; font-size: 12px; font-weight: bold; }.secondary { border-color: #9eafbf; background: white; color: #3e566c; }.primary { border-color: var(--blue); background: var(--blue); color: white; }.step { border-color: #397c55; background: #397c55; color: white; }.result { display: none; grid-column: 1 / -1; padding: 12px; border-left: 4px solid #397c55; background: #edf8ef; color: #286237; font-size: 12px; }.footer-note { padding: 14px 0 30px; border-top: 1px solid #d4dee7; color: #667789; font-size: 11px; line-height: 1.5; }.footer-note strong { color: var(--navy); }
+      @media (max-width: 720px) { .utility-inner, .header-inner, main, footer, nav .nav-inner { width: min(100% - 28px, 600px); }.utility-inner { display: block; }.utility a { margin: 0 14px 0 0; }.assam-mark { display: none; }.partner-logos { margin-left: auto; }.partner-logos img { height: 32px; }.partner-logos img:nth-child(2), .partner-logos img:nth-child(3) { width: 37px; }.header-inner { min-height: 78px; }.identity strong { font-size: 16px; }.identity small { font-size: 11px; }nav .nav-inner { overflow-x: auto; }nav a { flex: 0 0 auto; padding: 12px 14px; }.layout { grid-template-columns: 1fr; }.steps ol { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }.steps li { display: block; min-height: 0; text-align: center; }.steps li:not(:last-child)::after { top: 14px; left: 65%; width: 70%; height: 0; border-top: 1px solid #c9d4df; border-left: 0; }.steps li > span { margin: auto; }.steps li strong { font-size: 11px; }.steps li small, .help { display: none; } }
+      @media (max-width: 500px) { .heading h1 { font-size: 26px; }.partner-logos { display: none; }.form-card { padding: 18px 15px; }form { grid-template-columns: 1fr; }.wide, .actions, .result { grid-column: auto; }.form-title { display: block; }.required { display: block; margin-top: 8px; }.actions { flex-direction: column-reverse; }.btn { width: 100%; } }
+      @media (max-width: 500px) { .service-hero { min-height: 190px; margin-top: 14px; padding: 22px 18px; }.service-hero h1 { font-size: 23px; line-height: 1.25; }.service-hero p { font-size: 12px; }.hero-meta { right: 18px; bottom: 14px; }.hero-meta span { font-size: 10px; padding: 6px 7px; } }
+    </style>
+  </head>
+  <body>
+    <div class="gov-strip"></div>
+    <div class="utility"><div class="utility-inner"><span>Government of Assam | জনসাধাৰণৰ সেৱা</span><span><a href="#main">Skip to main content</a><a href="#help">Helpdesk</a></span></div></div>
+    <header>
+      <div class="header-inner">
+        <div class="identity"><img class="emblem" src="assets/emblem-of-india.svg" alt="State Emblem of India" /><div><strong>ASSAM SEWA SETU</strong><small>Integrated Citizen Services Portal</small></div></div>
+        <div class="assam-mark"><b>অসম চৰকাৰ</b>Government of Assam<br />Empowering citizens, serving Assam</div>
+        <figure class="partner-logos" aria-label="Partner logos from supplied reference">
+          <img src="assets/digital-india.png" alt="Digital India" />
+          <img src="assets/karnataka-emblem.png" alt="Government emblem" />
+          <img src="assets/nic-partner.png" alt="National Informatics Centre" />
+          <figcaption>Reference partner marks</figcaption>
+        </figure>
+      </div>
+    </header>
+    <nav aria-label="Primary navigation"><div class="nav-inner"><a href="#main">Home</a><a href="#application">Citizen Services</a><a href="#application">Applications</a><a href="#help">Contact Us</a></div></nav>
+    <main id="main">
+      <section class="service-hero" aria-label="Resident certificate service">
+        <h1>Access citizen services from anywhere in Assam</h1>
+        <p>Apply for certificates and public services through a secure, simple and transparent digital process.</p>
+        <div class="hero-meta"><span>24×7 access</span><span>Secure portal</span></div>
+      </section>
+      <div class="breadcrumb"><a href="#">Home</a><span>›</span><a href="#application">Citizen Services</a><span>›</span><b>Certificate Services</b></div>
+      <section class="heading"><h1>Resident Certificate / বাসিন্দা প্ৰমাণ পত্ৰ</h1><p>Apply online for a certificate confirming your residential status in Assam. Please keep your identity and address documents ready.</p></section>
+      <div class="layout">
+        <aside class="steps" aria-label="Application progress"><h2>Application steps</h2><ol><li class="active"><span>1</span><div><strong>Applicant details</strong><small>Basic information</small></div></li><li><span>2</span><div><strong>Address details</strong><small>Current residence</small></div></li><li><span>3</span><div><strong>Documents</strong><small>Upload proofs</small></div></li><li><span>4</span><div><strong>Declaration</strong><small>Review and submit</small></div></li></ol><div class="help" id="help"><b>Citizen support</b><br />For assistance, contact the Assam Sewa Setu helpdesk at <b>1800-000-000</b> during office hours.</div></aside>
+        <section class="form-card" id="application">
+          <div class="form-title"><div><h2>Applicant details</h2><p>Step 1 of 4 · Fields marked with * are mandatory</p></div><span class="required">* Required fields</span></div>
+          <form id="demoForm">
+            <div class="field"><label for="applicant_name">Full name / সম্পূৰ্ণ নাম <span>*</span></label><input id="applicant_name" name="applicant_name" autocomplete="name" placeholder="Enter your full legal name" required /><small>As mentioned in your identity document.</small></div>
+            <div class="field"><label for="email_address">Email address <span>*</span></label><input id="email_address" name="email_address" type="email" autocomplete="email" placeholder="name@example.com" required /></div>
+            <div class="field"><label for="mobile_number">Mobile number <span>*</span></label><input id="mobile_number" name="mobile_number" type="tel" inputmode="numeric" placeholder="10-digit mobile number" pattern="[0-9]{10}" required /></div>
+            <div class="field"><label for="birth_date">Date of birth <span>*</span></label><input id="birth_date" name="birth_date" type="date" autocomplete="bday" required /></div>
+            <div class="field"><label for="district">District <span>*</span></label><select id="district" name="district" required><option value="">Select district</option><option>Kamrup Metropolitan</option><option>Kamrup</option><option>Dibrugarh</option><option>Jorhat</option><option>Cachar</option><option>Sonitpur</option><option>Other</option></select></div>
+            <div class="field"><label for="pin_code">PIN code <span>*</span></label><input id="pin_code" name="pin_code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="6-digit PIN code" required /></div>
+            <div class="field wide"><label for="address">Residential address <span>*</span></label><textarea id="address" name="address" rows="3" placeholder="House number, street, village or locality" required></textarea></div>
+            <fieldset class="wide"><legend>Gender <span>*</span></legend><div class="options"><label><input type="radio" name="gender" value="Female" required /> Female</label><label><input type="radio" name="gender" value="Male" /> Male</label><label><input type="radio" name="gender" value="Other" /> Other</label><label><input type="radio" name="gender" value="Prefer not to say" /> Prefer not to say</label></div></fieldset>
+            <div class="field wide"><label for="guardian_name">Father's / Mother's / Guardian's name</label><input id="guardian_name" name="guardian_name" placeholder="Enter parent or guardian name" /></div>
+            <label class="checkline wide"><input id="consent" name="consent" type="checkbox" required /> I declare that the information provided above is true and correct to the best of my knowledge. <span>*</span></label>
+            <div id="demoResult" class="result" role="status"></div>
+            <div class="actions"><button class="btn secondary" type="reset">Clear form</button><button id="revealStep2Btn" class="btn step" type="button">Save and continue</button><button class="btn primary" type="submit">Submit application</button></div>
+          </form>
+          <p class="footer-note"><strong>Privacy notice:</strong> Your personal information is collected only for processing this application and will be handled in accordance with applicable Government of Assam policies.</p>
+        </section>
+      </div>
+    </main>
+    <footer>© Government of Assam · Assam Sewa Setu · This is a practice prototype and does not transmit information.</footer>
+    <script>
+      const form = document.getElementById("demoForm");
+      const result = document.getElementById("demoResult");
+      const showResult = (message) => { result.textContent = message; result.style.display = "block"; };
+      document.getElementById("revealStep2Btn").addEventListener("click", () => {
+        if (form.reportValidity()) showResult("Applicant details saved. Address verification is ready for the next step.");
+      });
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        if (form.reportValidity()) showResult("Practice prototype only: no information was submitted or transmitted.");
+      });
+    </script>
+  </body>
+</html>
