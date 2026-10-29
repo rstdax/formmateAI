@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Formmate</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main class="popup">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <span></span><i></i><b></b>
+      </div>
+      <div>
+        <h1>Formmate</h1>
+        <p>Voice-first digital assistant</p>
+      </div>
+    </div>
+    <div class="intro">
+      <h2>Forms, made simpler.</h2>
+      <p>Open Formmate beside any webpage to detect form fields, answer naturally by voice or text, and fill forms effortlessly.</p>
+    </div>
+    <section class="profiles" aria-labelledby="profilesTitle">
+      <div class="section-heading">
+        <h2 id="profilesTitle">Saved profiles</h2>
+        <span>Stored on this browser</span>
+      </div>
+      <label for="profileSelect">Choose a profile</label>
+      <select id="profileSelect" aria-describedby="profileStatus" disabled></select>
+      <div class="profile-actions">
+        <button id="newProfileBtn" class="secondary" type="button" disabled>Create</button>
+        <button id="editProfileBtn" class="secondary" type="button" disabled>Edit</button>
+        <button id="deleteProfileBtn" class="secondary" type="button" disabled>Delete</button>
+      </div>
+      <p id="profileStatus" class="profile-status" role="status" aria-live="polite"></p>
+      <p class="profile-storage-note">Profiles stay on this browser and are not encrypted. Don’t save passwords or highly sensitive IDs.</p>
+      <div id="profileEditor" hidden>
+        <label for="profileName">Profile name</label>
+        <input id="profileName" type="text" maxlength="60" autocomplete="off" placeholder="e.g. Personal">
+        <div id="profileFields" class="profile-fields"></div>
+        <p id="profileError" class="profile-error" role="alert" aria-live="polite"></p>
+        <div class="profile-actions">
+          <button id="cancelProfileBtn" class="secondary" type="button">Cancel</button>
+          <button id="saveProfileBtn" class="primary save-profile" type="button">Save Profile</button>
+        </div>
+      </div>
+    </section>
+    <button id="openAssistant" class="primary">Open Assistant <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></button>
+    <p id="popupStatus" class="status" role="status">Ready · No login required</p>
+    <p class="footnote">Formmate assists you in filling forms; you review and submit.</p>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>
