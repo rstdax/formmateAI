@@ -21,6 +21,8 @@
     parseSpokenDate: (v) => v,
     parseSpokenEmail: (v) => v,
     parseSpokenPhone: (v) => v,
+    parseSpokenDigits: (v) => v,
+    normalizeSpeechAnswer: (v) => v,
     stripConversationalFraming: (v) => v
   };
 
@@ -296,7 +298,9 @@
       }
     }
 
-    const value = String(rawValue ?? "").trim();
+    const value = String(
+      Core.normalizeSpeechAnswer(rawValue, item.semanticType) ?? ""
+    ).trim();
     if (!value) {
       return { success: false, error: "The provided answer is empty." };
     }
@@ -461,12 +465,13 @@
 
     // --- PIN CODE ---
     if (item.semanticType === "pincode") {
-      const pinDigits = value.replace(/\D/g, "");
+      const pinDigits = Core.parseSpokenDigits(value, 6, 6) || value.replace(/\D/g, "");
       if (pinDigits.length === 6) {
         setNativeValue(el, pinDigits);
         el.focus({ preventScroll: true });
         return { success: true, value: pinDigits, fieldId };
       }
+      return { success: false, error: "Please provide a six-digit PIN code." };
     }
 
     // --- HTML5 PATTERN VALIDATION ---

@@ -112,6 +112,24 @@ test("Alias match: 'WB' maps to West Bengal", () => {
   assert.strictEqual(res.matched.value, "WB");
 });
 
+test("Speech typo: 'Meghalia' maps to Meghalaya", () => {
+  const res = Core.matchOption(stateOptions, "Meghalia", "state");
+  assert.ok(res.matched);
+  assert.strictEqual(res.matched.label, "Meghalaya");
+  assert.strictEqual(res.tier, 7);
+});
+
+test("Similar typo matches remain ambiguous", () => {
+  const options = [
+    { value: "A", label: "Madhaya" },
+    { value: "B", label: "Madhava" }
+  ];
+  const res = Core.matchOption(options, "Madhaba", "state");
+  assert.strictEqual(res.matched, null);
+  assert.strictEqual(res.ambiguous, true);
+  assert.strictEqual(res.candidates.length, 2);
+});
+
 test("Invalid option returns friendly error and does not mutate", () => {
   const res = Core.matchOption(stateOptions, "California", "state");
   assert.strictEqual(res.matched, null);
@@ -210,6 +228,14 @@ test("Spoken email phrase 'at the rate' is normalized", () => {
   );
 });
 
+test("Email provider heard as 'gee mail' is normalized", () => {
+  assert.strictEqual(Core.parseSpokenEmail("rohan at gee mail dot com"), "rohan@gmail.com");
+});
+
+test("Email username is not rewritten as a provider alias", () => {
+  assert.strictEqual(Core.parseSpokenEmail("gee mail at gmail dot com"), "geemail@gmail.com");
+});
+
 test("Spoken email digit words in the username are normalized", () => {
   assert.strictEqual(
     Core.parseSpokenEmail("shubhan one two one b at the rate gmail dot com"),
@@ -219,6 +245,19 @@ test("Spoken email digit words in the username are normalized", () => {
 
 test("Spoken phone digits: 'nine eight seven six five four three two one zero'", () => {
   assert.strictEqual(Core.parseSpokenPhone("nine eight seven six five four three two one zero"), "9876543210");
+});
+
+test("Phone homophones and repeated digits are normalized", () => {
+  assert.strictEqual(
+    Core.parseSpokenPhone("double nine eight seven six five four three two one zero"),
+    "99876543210"
+  );
+  assert.strictEqual(Core.parseSpokenPhone("won to tree fore ate six seven"), "1234867");
+});
+
+test("Spoken PIN digits are normalized to six digits", () => {
+  assert.strictEqual(Core.parseSpokenDigits("one two three four five six", 6, 6), "123456");
+  assert.strictEqual(Core.parseSpokenDigits("one two three", 6, 6), null);
 });
 
 test("Formatted phone: '+91 98765 43210'", () => {
@@ -299,6 +338,47 @@ test("Strip: 'I am a male' -> 'male'", () => {
 
 test("Strip: 'My state is Assam' -> 'assam'", () => {
   assert.strictEqual(Core.stripConversationalFraming("My state is Assam", "state"), "assam");
+});
+
+test("Indian name dictionary includes 1,000+ names and generated speech variants", () => {
+  assert.ok(Core.nameDictionarySize >= 1000);
+  assert.ok(Core.nameVariantSize >= 1000);
+});
+
+test("Likely name spelling is suggested, not silently corrected", () => {
+  assert.strictEqual(Core.suggestNameCorrection("Subham", "full_name"), "Shubham");
+  assert.strictEqual(Core.suggestNameCorrection("Rohitt", "first_name"), "Rohit");
+  assert.strictEqual(Core.suggestNameCorrection("Shubham", "full_name"), null);
+  assert.strictEqual(Core.suggestNameCorrection("Subham", "address"), null);
+  assert.strictEqual(Core.suggestNameCorrection("Rohan Ranjan Das", "full_name"), null);
+});
+
+test("Address speech variants are corrected only for known address terms", () => {
+  assert.strictEqual(
+    Core.normalizeSpeechAnswer("My address is 12 Main rode, neer Green Park", "address"),
+    "12 main road near green park"
+  );
+  assert.strictEqual(
+    Core.normalizeSpeechAnswer("Flat 4, Behined the old post office", "address"),
+    "flat 4 behind the old post office"
+  );
+});
+
+test("Additional Indian address terms and speech variants are normalized", () => {
+  assert.strictEqual(
+    Core.normalizeSpeechAnswer(
+      "Flat 12 houseno 4, appartment near bustand, koloni road",
+      "address"
+    ),
+    "flat 12 house number 4 apartment near bus stand colony road"
+  );
+  assert.strictEqual(
+    Core.normalizeSpeechAnswer(
+      "Behind the hospitel, sector 5, mainrode",
+      "address"
+    ),
+    "behind the hospital sector 5 main road"
+  );
 });
 
 console.log("\n=== 7. BILINGUAL HINDI SUPPORT & STATE MACHINE ===");

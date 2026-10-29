@@ -186,6 +186,363 @@
     arunachal: "arunachal pradesh"
   };
 
+  const ADDRESS_SPEECH_ALIASES = {
+    adres: "address",
+    adress: "address",
+    addres: "address",
+    hause: "house",
+    hous: "house",
+    houseno: "house number",
+    housenumber: "house number",
+    flatte: "flat",
+    appartment: "apartment",
+    apartmant: "apartment",
+    bilding: "building",
+    bildin: "building",
+    flore: "floor",
+    rode: "road",
+    roat: "road",
+    rood: "road",
+    roade: "road",
+    strete: "street",
+    streat: "street",
+    strit: "street",
+    streett: "street",
+    avenu: "avenue",
+    avnue: "avenue",
+    avinue: "avenue",
+    lain: "lane",
+    lene: "lane",
+    lein: "lane",
+    draiv: "drive",
+    nager: "nagar",
+    naggar: "nagar",
+    coloni: "colony",
+    koloni: "colony",
+    kolony: "colony",
+    secktor: "sector",
+    sektar: "sector",
+    secctor: "sector",
+    blok: "block",
+    bloak: "block",
+    faze: "phase",
+    phaze: "phase",
+    ekstension: "extension",
+    extention: "extension",
+    villaje: "village",
+    vilage: "village",
+    villige: "village",
+    lokaliti: "locality",
+    localaty: "locality",
+    distrikt: "district",
+    distric: "district",
+    postel: "postal",
+    postall: "postal",
+    pincoad: "pin code",
+    pincod: "pin code",
+    postofis: "post office",
+    postoffice: "post office",
+    markett: "market",
+    markit: "market",
+    neer: "near",
+    neear: "near",
+    oposit: "opposite",
+    oposite: "opposite",
+    opposit: "opposite",
+    behined: "behind",
+    behine: "behind",
+    bside: "beside",
+    besid: "beside",
+    infront: "in front",
+    frontof: "in front of",
+    landmarc: "landmark",
+    templ: "temple",
+    mosk: "mosque",
+    hospitel: "hospital",
+    hospitl: "hospital",
+    skul: "school",
+    skool: "school",
+    colleg: "college",
+    colledge: "college",
+    staton: "station",
+    stasion: "station",
+    bustand: "bus stand",
+    busstand: "bus stand",
+    railvestation: "railway station",
+    railwaystation: "railway station",
+    basty: "basti",
+    layaut: "layout",
+    laysout: "layout",
+    mainrode: "main road",
+    mainstreett: "main street",
+    crossrode: "cross road"
+  };
+
+  const COMMON_INDIAN_NAMES = `
+    Aarav Aabha Aadi Aadhya Aahana Aakash Aakriti Aalia Aamir Aanya Aarohi Aarti Aaryan
+    Abhay Abhaya Abhinav Abhishek Abir Adarsh Adhira Aditya Advait Advika Agastya Aishani
+    Aishwarya Ajay Akash Akhil Akriti Akshara Akshay Akshita Alok Amala Aman Amara Amartya
+    Amit Amita Amol Amrita Amrutha Ananya Anaya Aniket Anil Anirban Anisha Anjali Anjana
+    Ankit Ansh Anshika Anup Anupama Anuradha Anusha Anushka Anushree Aparna Aravind Arjun
+    Arnav Arpita Aruna Arunima Arya Ashish Ashok Ashwini Asmita Avani Avika Ayush
+    Badal Balaram Baldev Bani Basant Bhagyashree Bhanu Bharath Bhargav Bhaskar Bhavana
+    Bhavika Bhavya Bhuvan Bhuvana Binal Biren Chaitali Chaitanya Chandan Chandni Charan
+    Charulata Chetan Chetna Chinmay Chitra Daksha Damini Darshan Deepa Deepak Deepali
+    Deepika Dev Devansh Devika Dhanush Dhanya Dhara Dhruv Dinesh Divya Eesha Eshaan
+    Gagan Gauri Gautam Geeta Gitanjali Gopal Gouri Govind Gunjan Harish Harsha Harshita
+    Hemal Hemant Hema Hitesh Ishan Ishita Jagruti Jai Jaideep Jaya Jayant Jayashree
+    Jeevan Jhanvi Jignesh Jitendra Kalyan Kalyani Kamal Kamala Kanchan Karan Karthik
+    Kaushal Kavita Kavya Keshav Khushi Kiran Kishore Komal Krish Krishna Krupa Kunal
+    Lakshmi Lalit Lavanya Leela Madhav Madhavi Madhuri Mahesh Maitreyi Malavika Manav
+    Mandeep Manish Manisha Manoj Mayank Meera Megha Mihir Mohan Mohini Mukesh Mukta
+    Nalini Namita Nandini Narendra Naveen Navya Neel Neha Nikhil Nisha Nitin Omkar
+    Pallavi Pankaj Parth Pooja Prabha Pradeep Pranav Prasad Prashant Pratibha Praveen
+    Preeti Priya Pritam Purnima Rahul Raj Rajan Rajesh Rajiv Rakesh Ram Ramesh Rani
+    Ranjan Ranjani Rashi Ravi Rekha Rhea Rishi Ritu Rohit Rohan Roshni Sachin Sagar
+    Sakshi Sameer Samir Sana Sanjay Sanjana Sanjeev Sanjiv Sarika Sarita Saurabh Savita
+    Shailesh Shalini Shankar Shantanu Sharad Shashank Sheela Shikha Shivam Shreya Shruti
+    Siddharth Simran Smita Sneha Sohan Sonali Srikant Srinivas Subhash Sudha Sujata
+    Suman Sumedha Sunil Suraj Suresh Sushant Swati Tanmay Tanya Tapan Tarun Tejas
+    Uday Ujwal Uma Urmila Vaibhav Vaishali Varun Vedant Veena Vibha Vijay Vikram
+    Vinay Vinod Vishal Vishesh Vivek Yash Yashasvi
+    Abeer Abhijit Abhijeet Abhimanyu Abhinandan Abirami Achintya Adwait Ahalya Ajeet
+    Akanksha Akhila Akshat Akshaya Alisha Ameya Amogh Amol Ameya Anagha Anamika
+    Ananya Aniruddha Anish Anjali Ankita Anmol Anupam Anurag Aradhya Aravind
+    Archana Armaan Arundhati Aryan Ashwini Atul Avinash Avinasha Avyukt
+    Bhuvaneshwari Bibhuti Bijoy Bimal Binita Bipin Brinda Buddhadeb
+    Chandra Chandrakant Chandrashekhar Charvi Chayan Chiranjeev
+    Debanjan Debashish Debasish Debjit Debolina Debojit Debjani Deependra
+    Devesh Devendra Devyani Dhananjay Dharmendra Dhruba Dibyendu Diganta
+    Dipankar Dipen Dipika Diptanshu Disha Dushyant
+    Eknath Ekta Elina Eshita
+    Falguni Farhan Firoz
+    Gajendra Gaurav Gayatri Gopalakrishnan Gourab Girish Girishkumar
+    Hardeep Harinder Harjit Harman Harpreet Harsh Harshad Hemendra Himani
+    Indira Indrajit Indrani Indu Ira Ishwar
+    Jagdish Jagannath Janhavi Janaki Jaydeep Jayesh Jishnu Jyoti Jyotsna
+    Kalyani Kanhaiya Kanika Kanishka Kanupriya Kaveri Keshav Khyati
+    Krishan Krishnendu Krithika Kshitij Kumari Kusum
+    Madhukar Madhumita Madhusudan Mahendra Mahima Makarand Manas Manasvi
+    Manohar Mansi Mayuri Medha Mihika Mrinal Mrinalini
+    Nabarun Nachiket Nagesh Naman Namrata Nandita Naren Narmada
+    Neeraj Niharika Nilay Nilima Nirav Niranjan Nirmal Nirmala Nupur
+    Padmaja Padmanabhan Parag Parimal Parineeta Pavan Piyush Prakash
+    Pranita Prarthana Pratik Prerana Priyanka Purva Pushkar
+    Rachana Radhika Raghu Rajendra Rajendra Rajendra Rajasree Rajat
+    Rajdeep Rajendra Rajendra Rajendra Raju Raksha Ranjit Rashmi
+    Ratna Riddhi Rishabh Rituparna Rukmini Rupali Rupesh
+    Samar Samarth Samiksha Sandip Sangita Sanjukta Santhosh Sarang
+    Saroj Satyajit Saumya Shailaja Shambhu Sharmila Shashwati
+    Shilpa Shirish Shivani Shubham Shubhangi Shweta Siddhi Soham
+    Srija Srijan Srijani Subhajit Suchitra Sudarshan Sudip
+    Supriya Sushila Sushma Sutapa Swapan Swapna Swarnali
+    Tirtha Trisha Trupti Ujjwal Upasana Vaidehi Vandana Vasudha
+    Venkatesh Vidya Vidyut Vinita Vishaka Yuvraj
+    Aadhavan Aadhira Aadhirai Aadhithya Aadhya Aathira Abirami Adhavan
+    Adhira Akilan Akshaya Amudhan Anbu Anirudh Anitha Anjali Aravind
+    Arul Aruna Ashwin Bala Balaji Bhuvana Chandran Dhanush Dharani
+    Ezhil Gokul Harini Ilakkiya Iniya Janani Kabilan Karthik Kavin
+    Kayal Kavinaya Keerthana Koushik Krithika Madhavan Mahalakshmi
+    Maheshwari Malathi Mithran Nandha Nandhini Naren Naveen Nila
+    Nithin Nivetha Padmini Pranesh Praveen Priyadarshini Raghav
+    Raghavan Rajkumar Ramya Ranjani Saranya Sathish Senthil Shalini
+    Shanmugam Shashikumar Shreya Sivakumar Sreeja Sriram Subramanian
+    Sudharsan Suganya Sujatha Surya Tamilarasi Tamilselvan Tharani
+    Udhaya Umai Vasanth Vignesh Vijayalakshmi Vinoth Vishnu Yazhini
+    Aadhikesavan Aathmanathan Abhinaya Akshara Amirtha Anbuchelvan
+    Annamalai Aravazhi Arulmozhi Balasubramanian Bharathi Bhavani
+    Chitra Devi Durga Elango Gajalakshmi Gnanavel Gopika Ilamaran
+    Inban Jeevitha Kalyanasundaram Kani Karthikeyan Karuppasamy
+    Kavinmathi Kayalvizhi Kowsalya Krishnaveni Madhumitha Manimekalai
+    Muralidharan Natarajan Nithya Panneerselvam Pugazh Rajeswari
+    Rajalakshmi Ramachandran Raveena Revathi Sakthivel Selvaraj
+    Shanmukhapriya Sivaranjani Soundarya Subha Sudarvizhi Thenmozhi
+    Thirumalai Vetrivel Vidhya
+    Aadhya Abhiram Abhinav Achyut Aditya Akhil Akshara Amrutha Anagha
+    Ananya Anirudh Anusha Arjun Ashwin Avinash Bala Bhargavi Bhavana
+    Charan Chiranjeevi Deepthi Deeksha Devansh Dhanush Divija Eesha
+    Goutham Harika Harsha Harshini Hemanth Indu Jahnavi Jyothi Kalyan
+    Keerthi Kiran Kishore Krupa Lahari Lakshmi Lavanya Madhavi Madhukar
+    Mahathi Manasa Meghana Mohan Nandita Nikhil Nikhila Niharika Nikhitha
+    Pavan Pranavi Prasad Praveen Priya Radhika Rajesh Ramya Rithika
+    Rohini Sai Sandeep Sanjana Sravani Sreeja Sreeram Srikanth Srinath
+    Srujana Subbarao Sudheer Suhasini Sumanth Swetha Tanvi Teja
+    Uday Usha Vaishnavi Varsha Vamsi Venkata Vibhav Vijay Vishal
+    Vishnu Vivek Yamini Yashwanth
+    Aamani Aastha Abhinaya Advaith Aishani Akshitha Amulya Anvitha
+    Aravindh Ashritha Bindu Chandrika Chaitra Charitha Devaki Dhanya
+    Divya Gayathri Geethika Gowri Harinath Hima Hitha Indira Karthika
+    Kavitha Lalitha Madhulika Mahendra Manjula Mrudula Naga Nagaiah
+    Nitya Poojitha Pranitha Prathyusha Rajeswari Sadhana Sravya
+    Sujatha Sunitha Swarnalatha Tejaswi Usha Vagdevi Vani Vasavi
+    Vennela Vijaya Yamuna
+    Aabha Aakanksha Aakriti Aarti Aastha Aditi Adrija Ahana Aishani
+    Aishwarya Akanksha Akshara Aloka Amrita Ananya Anindita Anjali
+    Ankita Anushree Aparajita Arpita Arundhati Asmita Avantika
+    Barnali Bhaswati Bidisha Bipasha Bratati Chandrima Debalina
+    Debjani Debolina Deepanwita Devlina Dola Esha Gargi Gitali
+    Ipsita Ishani Jaya Jhinuk Junali Kaberi Keya Koel Labanya
+    Madhumita Maitreyee Mallika Mili Moumita Nabanita Nandita
+    Piyali Poulomi Raka Ranjita Riya Rituparna Sanchari Sayantani
+    Sharmistha Shreya Sohini Sreya Suchandra Sutapa Tanushree
+    Trina Urmi Ushasi
+    Abhijit Abir Aritro Arka Arnab Ayan Bappaditya Bappaditya
+    Barun Bibek Bikash Biswajit Debabrata Debashis Debdeep Debjit
+    Debojyoti Dipak Joydeep Kaushik Kunal Mainak Niladri Prabir
+    Prasenjit Prosenjit Rajarshi Ritwik Sagnik Samrat Saptarshi
+    Shantanu Shubho Soumya Subhajit Supratik Tathagata Udayan
+    Animesh Anirban Arindam Ashim Avik Bibhuti Chayan Chiranjit
+    Debayan Diptendu Indranil Koushik Partha Ritam Sayan Shiladitya
+    Shouvik Souvik Subhankar Sumit Sutirtha Tamal
+    Aakriti Aarna Aashima Aastha Abha Adya Aditi Aishwarya Akriti
+    Amrita Anamika Anchal Anju Anupreet Arshdeep Avneet Baljeet
+    Charanpreet Daljeet Dilpreet Gagandeep Gurleen Gurmeet Gurpreet
+    Harleen Harmeet Harpreet Harsimran Jasleen Jasmeet Jaspreet
+    Jaswinder Kanwal Karamjeet Kuldeep Kulwinder Lovepreet Maninder
+    Navdeep Navjot Paramjeet Prabhjot Prabhleen Prabhpreet Rajdeep
+    Ramandeep Ravinder Rupinder Sandeep Satinder Simranmandeep
+    Sukhdeep Sukhleen Sukhpreet Taranjeet Tejinder
+    Amarjit Amritpal Arsh Balbir Baldev Bikram Charanjit Dalbir
+    Davinder Gurdas Gurdeep Gurinder Gurkirat Gurman Gurtej
+    Harbhajan Hardeep Harjot Harjinder Harjot Harpal Harvinder
+    Jasbir Jasdeep Jaspal Jasraj Jatinder Karanbir Manjit Mandeep
+    Navneet Parminder Rajinder Ranbir Ranjit Sarabjit Sukhbir
+    Sukhdev Surinder Tejpal
+    Aarya Aashna Aditi Anagha Anuja Anushree Apurva Archana
+    Arundhati Ashwini Avani Bhagyashree Bhakti Bhavana Chaitali
+    Charuta Chhaya Dipali Gauri Gayatri Gitanjali Hiral Isha
+    Jui Kajal Kalyani Kanchan Ketaki Kranti Krupa Madhura
+    Manasi Manjiri Mayuri Mrunal Mugdha Namrata Neelam Nupur
+    Pallavi Prajakta Pranali Prarthana Prerana Priyanka Priti
+    Purva Radhika Rajashree Ranjana Rucha Rupali Sayali Shalmali
+    Shilpa Shivani Shravani Shubhangi Smita Snehal Sonali
+    Sujata Tanvi Tejal Trupti Vaishali Varsha Vrushali
+    Abhijit Aditya Ajinkya Akshay Amey Aniket Aniruddha Atharva
+    Avadhoot Avinash Bhushan Chetan Chinmay Dhananjay Gajanan
+    Ganesh Girish Hrishikesh Kedar Kunal Mandar Manish Mihir
+    Nilesh Nikhil Nitin Omkar Prasad Prashant Prathamesh Rahul
+    Rajendra Sanket Saurabh Shantanu Shashank Shreyas Siddhesh
+    Soham Suyash Swapnil Tushar Vaibhav Vedant Vikram Vinay
+    Vishal Yash
+    Aadhya Aiswarya Akhila Amala Anjali Anju Anupama Aparna
+    Aswathy Athira Bhama Bhavana Bindu Chippy Deepa Devika
+    Diya Gopika Greeshma Indu Karthika Kavya Keerthana Lekshmi
+    Malavika Manju Meera Megha Neethu Nisha Parvathy Remya
+    Riya Sangeetha Saritha Shalini Sneha Soumya Sreelakshmi
+    Sreedevi Sreeja Sreya Surabhi Swathi Veena Vidya
+    Abhilash Abin Abhijith Ajith Akhil Amal Anand Anoop Arun
+    Biju Deepak Dileep Hari Harikrishnan Jithin Kiran Krishnan
+    Manu Midhun Nithin Pranav Rajesh Rahul Ramesh Sandeep
+    Santhosh Sreejith Suresh Unni Vishnu
+    Aishwarya Akshara Amrutha Anagha Anjana Anupama Archana
+    Aswathy Athira Devika Diya Ganga Gouri Greeshma Hima
+    Lakshmi Lekshmi Malathi Meenakshi Nandana Nayana Nikhila
+    Parvathy Radhika Rajani Ranjini Remya Sangeetha Saranya
+    Sreelakshmi Sreevidya Swathi Usha Varsha
+    Aaryan Aarya Aathira Abhaya Adarsh Adhya Aishani Akshaya
+    Alok Ananya Aniruddha Anish Anjali Anmol Anshuman Aradhana
+    Aravind Arvind Ashutosh Avinash Bhavesh Bhushan Chandan
+    Chandra Chetna Darshana Deependra Devendra Dhanashree Dhaval
+    Dinesh Eknath Ganesh Gauri Girish Gopal Harshad Hemal
+    Indrajeet Jayant Jitendra Kiran Kunal Lalit Madhav Mahendra
+    Manohar Mangesh Mayank Milind Mukund Nandkishor Nikhil
+    Nilesh Nitin Pankaj Parag Pradeep Pranav Prasad Pravin
+    Rajan Rajesh Ramesh Ranjit Ravindra Sachin Sanjay Sharad
+    Shashank Shrikant Sumeet Sunil Suresh Umesh Vaibhav Vinay
+    Vinod Vishal Vivek
+  `.trim().split(/\s+/);
+
+  // Variants only produce a confirmation suggestion; they never replace user input.
+  const NAME_VARIANT_RULES = [
+    [/aa/g, "a"], [/a/g, "aa"], [/ee/g, "i"], [/ee/g, "e"],
+    [/e/g, "i"], [/i/g, "ee"], [/oo/g, "u"], [/oo/g, "o"],
+    [/o/g, "u"], [/u/g, "oo"], [/sh/g, "s"], [/s/g, "sh"],
+    [/v/g, "w"], [/w/g, "v"], [/kh/g, "k"], [/k/g, "kh"],
+    [/gh/g, "g"], [/g/g, "gh"], [/th/g, "t"], [/t/g, "th"],
+    [/dh/g, "d"], [/d/g, "dh"], [/bh/g, "b"], [/b/g, "bh"],
+    [/ph/g, "f"], [/f/g, "ph"], [/chh/g, "ch"], [/ch/g, "c"],
+    [/h/g, ""], [/y/g, "i"], [/j/g, "z"]
+  ];
+
+  function buildNameVariantIndex() {
+    const index = new Map();
+    const canonicalNames = new Set(
+      COMMON_INDIAN_NAMES.map((name) => normalizeText(name))
+    );
+
+    for (const name of canonicalNames) {
+      const variants = new Set([name]);
+      for (const [pattern, replacement] of NAME_VARIANT_RULES) {
+        if (pattern.test(name)) {
+          pattern.lastIndex = 0;
+          variants.add(name.replace(pattern, replacement));
+        }
+        pattern.lastIndex = 0;
+      }
+      if (/[aeiou]$/.test(name)) {
+        variants.add(name.slice(0, -1));
+      }
+      for (let i = 0; i < name.length; i++) {
+        if (!/[a-z]/.test(name[i])) continue;
+        if (name[i] !== name[i - 1]) {
+          variants.add(`${name.slice(0, i)}${name[i]}${name.slice(i)}`);
+        }
+        if (name[i] === name[i - 1]) {
+          variants.add(`${name.slice(0, i)}${name.slice(i + 1)}`);
+        }
+      }
+
+      for (const variant of variants) {
+        if (!variant || variant === name) continue;
+        if (!index.has(variant)) index.set(variant, new Set());
+        index.get(variant).add(name);
+      }
+    }
+
+    return index;
+  }
+
+  const NAME_VARIANT_INDEX = buildNameVariantIndex();
+  const CANONICAL_NAME_SET = new Set(
+    COMMON_INDIAN_NAMES.map((name) => normalizeText(name))
+  );
+
+  function suggestNameCorrection(rawInput, semanticType) {
+    if (!["full_name", "first_name", "last_name", "guardian_name"].includes(semanticType)) {
+      return null;
+    }
+    const cleaned = transliterateHindiToLatin(
+      stripConversationalFraming(rawInput, semanticType)
+    );
+    const words = normalizeText(cleaned).split(" ").filter(Boolean);
+    let bestSuggestion = null;
+
+    for (let wordIndex = 0; wordIndex < words.length; wordIndex++) {
+      const word = words[wordIndex];
+      if (word.length < 3) continue;
+      if (CANONICAL_NAME_SET.has(word)) continue;
+      const candidates = new Set(NAME_VARIANT_INDEX.get(word) || []);
+      candidates.delete(word);
+      if (candidates.size !== 1) continue;
+      const [candidate] = candidates;
+      if (bestSuggestion) return null;
+      words[wordIndex] = candidate;
+      bestSuggestion = words.map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
+    }
+
+    return bestSuggestion;
+  }
+
+  function normalizeAddressSpeech(rawInput) {
+    const cleaned = stripConversationalFraming(rawInput, "address");
+    if (!cleaned) return "";
+
+    return normalizeText(cleaned)
+      .split(" ")
+      .map((word) => ADDRESS_SPEECH_ALIASES[word] || word)
+      .join(" ");
+  }
+
   // --- Conversational Framing Stripper ---
 
   function stripConversationalFraming(text, semanticType) {
@@ -385,6 +742,51 @@
           ambiguous: true,
           candidates: candidates.map((c) => c.original),
           error: `Multiple options match “${raw}”: ${candidates.map((c) => c.original.label).join(", ")}.`
+        };
+      }
+    }
+
+    // Correct likely speech-to-text typos only when one option is clearly closest.
+    if (query.length >= 5) {
+      const editDistance = (left, right) => {
+        const row = Array.from({ length: right.length + 1 }, (_, index) => index);
+        for (let i = 1; i <= left.length; i++) {
+          let previous = row[0];
+          row[0] = i;
+          for (let j = 1; j <= right.length; j++) {
+            const current = row[j];
+            row[j] = Math.min(
+              row[j] + 1,
+              row[j - 1] + 1,
+              previous + (left[i - 1] === right[j - 1] ? 0 : 1)
+            );
+            previous = current;
+          }
+        }
+        return row[right.length];
+      };
+      const maxDistance = query.length >= 8 ? 2 : 1;
+      const ranked = prepared
+        .map((option) => ({
+          ...option,
+          distance: editDistance(query, option.normLabel)
+        }))
+        .filter((option) => option.distance <= maxDistance)
+        .sort((left, right) => left.distance - right.distance);
+
+      if (ranked.length === 1 ||
+          (ranked.length > 1 && ranked[0].distance < ranked[1].distance)) {
+        return { matched: ranked[0].original, tier: 7 };
+      }
+
+      if (ranked.length > 1 && ranked[0].distance === ranked[1].distance) {
+        return {
+          matched: null,
+          ambiguous: true,
+          candidates: ranked
+            .filter((option) => option.distance === ranked[0].distance)
+            .map((option) => option.original),
+          error: `I heard “${raw}”, and more than one available option sounds similar.`
         };
       }
     }
@@ -591,6 +993,12 @@
 
     const atIndex = converted.indexOf("@");
     if (atIndex >= 0) {
+      const domain = converted.slice(atIndex + 1)
+        .replace(/\b(?:gee\s*mail|g\s*mail|google\s*mail)\b/g, "gmail")
+        .replace(/\byahoo\s*mail\b/g, "yahoo")
+        .replace(/\bout\s*look\b/g, "outlook")
+        .replace(/\bhot\s*mail\b/g, "hotmail")
+        .replace(/\brediff\s*mail\b/g, "rediffmail");
       const spokenDigits = {
         zero: "0", one: "1", two: "2", three: "3", four: "4",
         five: "5", six: "6", seven: "7", eight: "8", nine: "9"
@@ -599,7 +1007,7 @@
         /\b(zero|one|two|three|four|five|six|seven|eight|nine)\b/g,
         (word) => spokenDigits[word]
       );
-      converted = `${localPart}${converted.slice(atIndex)}`;
+      converted = `${localPart}@${domain}`;
     }
 
     converted = converted
@@ -614,35 +1022,48 @@
 
   // --- Spoken Phone Normalizer ---
 
-  function parseSpokenPhone(rawInput) {
+  function parseSpokenDigits(rawInput, minLength = 1, maxLength = 15) {
     let text = normalizeText(rawInput);
     if (!text) return null;
 
-    // Convert spoken digit words
     const digitWords = {
       zero: "0", oh: "0", one: "1", two: "2", three: "3", four: "4",
-      five: "5", six: "6", seven: "7", eight: "8", nine: "9"
+      five: "5", six: "6", seven: "7", eight: "8", nine: "9",
+      nought: "0", nil: "0", won: "1", to: "2", too: "2",
+      tree: "3", fore: "4", ate: "8"
     };
-
-    // Handle "double" / "triple": "double nine" -> "99"
-    text = text.replace(/\bdouble\s+([a-z0-9])/gi, (m, d) => `${d} ${d}`);
-    text = text.replace(/\btriple\s+([a-z0-9])/gi, (m, d) => `${d} ${d} ${d}`);
 
     const tokens = text.split(/\s+/);
     let assembled = "";
-    for (const t of tokens) {
+    for (let i = 0; i < tokens.length; i++) {
+      const t = tokens[i];
+      if ((t === "double" || t === "triple") && i + 1 < tokens.length) {
+        const nextToken = tokens[++i];
+        const nextDigit = digitWords[nextToken] ??
+          (/^\d$/.test(nextToken) ? nextToken : null);
+        if (nextDigit !== null) {
+          assembled += nextDigit.repeat(t === "double" ? 2 : 3);
+          continue;
+        }
+      }
       if (digitWords[t] !== undefined) {
         assembled += digitWords[t];
-      } else if (/^\d+$/.test(t)) {
-        assembled += t;
+      } else if (/^\+?\d+$/.test(t)) {
+        assembled += t.replace(/\D/g, "");
       }
     }
 
-    if (assembled.length >= 7 && assembled.length <= 15) {
+    if (assembled.length >= minLength && assembled.length <= maxLength) {
       return assembled;
     }
+    return null;
+  }
 
-    // Try standard regex match on original
+  function parseSpokenPhone(rawInput) {
+    const parsedDigits = parseSpokenDigits(rawInput, 7, 15);
+    if (parsedDigits) return parsedDigits;
+
+    // Preserve formatting for conventional numeric phone input.
     const rawMatch = String(rawInput || "").match(/(?:\+?\d[\d\s().-]{6,}\d)/);
     if (rawMatch) {
       const digits = rawMatch[0].replace(/\D/g, "");
@@ -652,6 +1073,25 @@
     }
 
     return null;
+  }
+
+  function normalizeSpeechAnswer(rawInput, semanticType = "general") {
+    const raw = String(rawInput || "").trim();
+    if (!raw) return "";
+
+    if (semanticType === "email") {
+      return parseSpokenEmail(raw) || raw;
+    }
+    if (semanticType === "phone") {
+      return parseSpokenPhone(raw) || raw;
+    }
+    if (semanticType === "pincode") {
+      return parseSpokenDigits(raw, 6, 6) || raw;
+    }
+    if (semanticType === "address") {
+      return normalizeAddressSpeech(raw) || raw;
+    }
+    return stripConversationalFraming(raw, semanticType) || raw;
   }
 
   function formatPhoneForSpeech(value, lang = "en-IN") {
@@ -927,12 +1367,18 @@
     cleanPunctuation,
     transliterateHindiToLatin,
     stripConversationalFraming,
+    normalizeAddressSpeech,
     parseOrdinal,
     matchOption,
     parseBooleanAnswer,
     parseSpokenDate,
     parseSpokenEmail,
     parseSpokenPhone,
+    parseSpokenDigits,
+    normalizeSpeechAnswer,
+    suggestNameCorrection,
+    nameDictionarySize: CANONICAL_NAME_SET.size,
+    nameVariantSize: NAME_VARIANT_INDEX.size,
     formatPhoneForSpeech,
     recognizeCommand,
     ConversationStateMachine,

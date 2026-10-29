@@ -179,6 +179,7 @@ const state = {
   profiles: [],
   activeProfileId: "",
   pendingProfileConfirmation: false,
+  pendingNameCorrection: null,
   currentFieldId: null,
   currentTurnId: 0,
   stateMachine: null,
@@ -1047,13 +1048,21 @@ function startListening() {
             .map((alternatives) => alternatives[alternativeIndex] || alternatives[0])
             .join("")
       );
+      const optionAnswer = field?.options?.length
+        ? transcriptCandidates
+          .map((candidate) => ({
+            candidate,
+            match: Core.matchOption(field.options, candidate, field.semanticType)
+          }))
+          .find(({ match }) => match.matched)?.candidate
+        : null;
       const phoneAnswer = field?.semanticType === "phone"
         ? transcriptCandidates.find((candidate) => Core.parseSpokenPhone(candidate))
         : null;
       const emailAnswer = field?.semanticType === "email"
         ? transcriptCandidates.map((candidate) => Core.parseSpokenEmail(candidate)).find(Boolean)
         : null;
-      const answer = (phoneAnswer || emailAnswer || final).trim();
+      const answer = (optionAnswer || phoneAnswer || emailAnswer || final).trim();
       setTranscript(`“${answer}”`);
 
       // Log user turn
@@ -1189,7 +1198,7 @@ function announceCompletion() {
 
 // --- Answer Processing & Field Filling ---
 
-async function handleUserAnswer(rawText, turnId) {
+async function handleUserAnswer(rawText, turnId, skipNameCorrection = false) {
   if (turnId !== state.currentTurnId) {
     return; // Discard stale turn results
   }
@@ -1210,6 +1219,18 @@ async function handleUserAnswer(rawText, turnId) {
     return;
   }
 
+  if (state.pendingNameCorrection) {
+    const pending = state.pendingNameCorrection;
+    state.pendingNameCorrection = null;
+    const decision = Core.parseBooleanAnswer(rawText);
+    const answer = decision === true ? pending.suggestion
+      : decision === false ? pending.rawText
+        : rawText;
+    state.isProcessingAnswer = false;
+    await handleUserAnswer(answer, turnId, true);
+    return;
+  }
+
   // 1. Check for Conversational Control Commands
   const command = Core.recognizeCommand(rawText);
   if (command) {
@@ -1224,6 +1245,34 @@ async function handleUserAnswer(rawText, turnId) {
     state.stateMachine.transition(Core.States.READY);
     state.isProcessingAnswer = false;
     return;
+  }
+
+  if (!skipNameCorrection) {
+    const suggestion = Core.suggestNameCorrection(rawText, field.semanticType);
+    if (suggestion && Core.normalizeText(suggestion) !== Core.normalizeText(rawText)) {
+      state.pendingNameCorrection = { rawText, suggestion };
+      state.isProcessingAnswer = false;
+      const prompt = state.lang.startsWith("hi")
+        ? `मैंने “${rawText}” सुना। इससे मिलता-जुलता नाम “${suggestion}” है। क्या मैं यही वर्तनी इस्तेमाल करूँ? हाँ कहें, या नहीं कहें ताकि आपका मूल नाम रखा जाए।`
+        : `I heard “${rawText}”. A name that sounds similar is “${suggestion}”. Should I use that spelling? Say yes to use it, or no to keep your original.`;
+      state.history.push({
+        role: "assistant",
+        text: prompt,
+        timestamp: new Date().toLocaleTimeString(),
+        fieldId: field.id,
+        fieldLabel: field.label
+      });
+      $("listeningStatus").textContent = "Confirm name spelling";
+      $("waveformHint").textContent = "*say yes to use suggestion, no to keep yours";
+      const confirmTurn = ++state.currentTurnId;
+      speakQuestion(prompt, confirmTurn, () => {
+        if (state.pendingNameCorrection && state.currentTurnId === confirmTurn &&
+            !state.stateMachine.is(Core.States.PAUSED)) {
+          startListening();
+        }
+      });
+      return;
+    }
   }
 
   state.stateMachine.transition(Core.States.VALIDATING);
@@ -1626,6 +1675,7 @@ async function getActiveTab() {
 
 async function scanCurrentPage(startImmediately = false) {
   state.pendingProfileConfirmation = false;
+  state.pendingNameCorrection = null;
   $("profileConfirmationActions").hidden = true;
   state.stateMachine.transition(Core.States.SCANNING);
   try {

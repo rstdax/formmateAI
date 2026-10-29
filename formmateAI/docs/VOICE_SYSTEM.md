@@ -49,6 +49,9 @@ FORMMATE utilizes standard W3C Web Speech APIs native to Google Chrome:
 - **Speech Recognition (`webkitSpeechRecognition` / `SpeechRecognition`)**: Converts spoken user audio into real-time transcripts.
 - **Speech Synthesis (`window.speechSynthesis`, `SpeechSynthesisUtterance`)**: Speaks natural prompts, confirmations, and guidance aloud.
 
+### Transcript Normalization
+After browser recognition, FORMMATE applies local, field-aware normalization before filling a field. It handles spoken email symbols and common provider-name variants, digit homophones and repeated digits for phone numbers, and spoken digits for PIN codes. For select/radio fields, it compares recognition alternatives with the live options and accepts a close spelling only when there is a unique best match; ambiguous matches still request clarification. Address fields use a curated list of common recognition variants for address terms such as house number, apartment, road/street, colony, sector, locality, landmarks, and nearby places (for example, “rode” to “road” and “neer” to “near”). Name fields use a local dictionary of 1,000+ Indian names and generated phonetic spelling variants. A unique likely spelling is offered to the user for confirmation; FORMMATE never changes a name unless the user accepts. Ambiguous or unlisted names are kept as spoken.
+
 ### Overcoming Known Chromium SpeechSynthesis Bugs:
 1. **Garbage Collection Cut-off Bug:**
    In Chrome V8, `SpeechSynthesisUtterance` instances are frequently garbage-collected mid-speech if stored only in local variables. FORMMATE anchors active utterances into a global set (`window._activeSpeechUtterances = new Set()`) until the `utterance.onend` event completes.
