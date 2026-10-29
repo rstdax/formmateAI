@@ -1,31 +1,42 @@
 package com.rst.heyrst
 
 import android.Manifest
+import android.accessibilityservice.AccessibilityService
+import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.text.TextUtils
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.rst.heyrst.accessibility.RSTAccessibilityService
 import com.rst.heyrst.ui.theme.HeyRSTTheme
 
 class MainActivity : ComponentActivity() {
 
     private var hasAudioPermission by mutableStateOf(false)
     private var hasOverlayPermission by mutableStateOf(false)
+    private var hasAccessibilityPermission by mutableStateOf(false)
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -47,12 +58,15 @@ class MainActivity : ComponentActivity() {
                     SetupDashboard(
                         hasAudio = hasAudioPermission,
                         hasOverlay = hasOverlayPermission,
+                        hasAccessibility = hasAccessibilityPermission,
                         engineStatus = AssistantOverlayService.engineStatus,
                         lastHeard = AssistantOverlayService.lastHeardSpeech,
                         onRequestPermissions = { requestAudioAndNotificationPermissions() },
                         onRequestOverlay = { openOverlaySettings() },
+                        onRequestAccessibility = { openAccessibilitySettings() },
                         onStartService = { sendServiceAction(AssistantOverlayService.ACTION_START_LISTENING) },
                         onTriggerOverlayTest = { sendServiceAction(AssistantOverlayService.ACTION_SHOW_OVERLAY) },
+                        onTriggerDemoForm = { sendServiceAction(AssistantOverlayService.ACTION_TEST_DEMO_FORM) },
                         onStopService = { stopService(Intent(this, AssistantOverlayService::class.java)) }
                     )
                 }
@@ -68,6 +82,7 @@ class MainActivity : ComponentActivity() {
     private fun refreshPermissionStates() {
         hasAudioPermission = checkAudioPermission()
         hasOverlayPermission = Settings.canDrawOverlays(this)
+        hasAccessibilityPermission = isAccessibilityServiceEnabled(this, RSTAccessibilityService::class.java)
     }
 
     private fun checkAudioPermission(): Boolean {
@@ -75,6 +90,25 @@ class MainActivity : ComponentActivity() {
             this,
             Manifest.permission.RECORD_AUDIO
         ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun isAccessibilityServiceEnabled(context: Context, serviceClass: Class<out AccessibilityService>): Boolean {
+        if (RSTAccessibilityService.isServiceRunning()) return true
+        val expectedComponentName = ComponentName(context, serviceClass)
+        val enabledServicesSetting = Settings.Secure.getString(
+            context.contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        ) ?: return false
+        val colonSplitter = TextUtils.SimpleStringSplitter(':')
+        colonSplitter.setString(enabledServicesSetting)
+        while (colonSplitter.hasNext()) {
+            val componentNameString = colonSplitter.next()
+            val enabledComponent = ComponentName.unflattenFromString(componentNameString)
+            if (enabledComponent != null && enabledComponent == expectedComponentName) {
+                return true
+            }
+        }
+        return false
     }
 
     private fun requestAudioAndNotificationPermissions() {
@@ -93,11 +127,16 @@ class MainActivity : ComponentActivity() {
         startActivity(intent)
     }
 
+    private fun openAccessibilitySettings() {
+        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+        startActivity(intent)
+    }
+
     private fun sendServiceAction(action: String) {
         if (!hasAudioPermission || !hasOverlayPermission) {
             Toast.makeText(
                 this,
-                "Grant both Microphone and Overlay permissions first!",
+                "Grant Microphone and Overlay permissions first!",
                 Toast.LENGTH_SHORT
             ).show()
             return
@@ -117,50 +156,83 @@ class MainActivity : ComponentActivity() {
 fun SetupDashboard(
     hasAudio: Boolean,
     hasOverlay: Boolean,
+    hasAccessibility: Boolean,
     engineStatus: String,
     lastHeard: String,
     onRequestPermissions: () -> Unit,
     onRequestOverlay: () -> Unit,
+    onRequestAccessibility: () -> Unit,
     onStartService: () -> Unit,
     onTriggerOverlayTest: () -> Unit,
+    onTriggerDemoForm: () -> Unit,
     onStopService: () -> Unit
 ) {
+    val scrollState = rememberScrollState()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.Center,
+            .verticalScroll(scrollState)
+            .padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        Spacer(modifier = Modifier.height(10.dp))
+
         Text(
-            text = "Hey RST (In-House Engine)",
+            text = "Hey RST — Form Companion",
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.onBackground,
             fontWeight = FontWeight.Bold
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = "100% Free • Zero External APIs • com.rst.heyrst",
+            text = "Voice-First Auto Form Filler for Chrome & Android",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.secondary
         )
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(18.dp))
 
-        // Live In-House Audio Debugger Card
+        // Live Audio Debugger Card
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "Engine Status: $engineStatus",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.secondary,
-                    fontWeight = FontWeight.SemiBold
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Wake Word: \"Hey RST\"",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                if (engineStatus.contains("Active", ignoreCase = true)) Color(0xFF10B981) else Color(0xFF64748B),
+                                RoundedCornerShape(12.dp)
+                            )
+                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = if (engineStatus.contains("Active", ignoreCase = true)) "ONLINE" else "STANDBY",
+                            color = Color.White,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
                 Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Status: $engineStatus",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Text(
                     text = "Last Heard: \"$lastHeard\"",
                     style = MaterialTheme.typography.bodySmall,
@@ -169,43 +241,89 @@ fun SetupDashboard(
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
+        Text(
+            text = "REQUIRED PERMISSIONS",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.secondary,
+            modifier = Modifier.align(Alignment.Start)
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Step 1: Microphone
         Button(
             onClick = onRequestPermissions,
             modifier = Modifier.fillMaxWidth(),
-            enabled = !hasAudio
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (hasAudio) Color(0xFF10B981) else MaterialTheme.colorScheme.primary
+            )
         ) {
-            Text(if (hasAudio) "✓ 1. Microphone Permission Granted" else "1. Grant Microphone Permission")
+            Text(if (hasAudio) "✓ 1. Microphone Granted" else "1. Grant Microphone Permission")
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
+        // Step 2: Overlay
         Button(
             onClick = onRequestOverlay,
             modifier = Modifier.fillMaxWidth(),
-            enabled = !hasOverlay
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (hasOverlay) Color(0xFF10B981) else MaterialTheme.colorScheme.primary
+            )
         ) {
-            Text(if (hasOverlay) "✓ 2. Overlay Permission Granted" else "2. Enable Display Over Other Apps")
+            Text(if (hasOverlay) "✓ 2. Display Over Other Apps Granted" else "2. Enable Display Over Other Apps")
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Step 3: Accessibility
+        Button(
+            onClick = onRequestAccessibility,
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (hasAccessibility) Color(0xFF10B981) else Color(0xFF6366F1)
+            )
+        ) {
+            Text(if (hasAccessibility) "✓ 3. Accessibility Service Enabled" else "3. Enable Accessibility Service (Chrome Form Sync)")
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Text(
+            text = "ACTIONS & TESTING",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.secondary,
+            modifier = Modifier.align(Alignment.Start)
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
 
         Button(
             onClick = onStartService,
             modifier = Modifier.fillMaxWidth(),
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
         ) {
-            Text("Start \"Hey RST\" Listener")
+            Text("Start \"Hey RST\" Background Listener")
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         OutlinedButton(
             onClick = onTriggerOverlayTest,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Test Floating Overlay Card Now")
+            Text("Test Overlay on Active Chrome Form")
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        FilledTonalButton(
+            onClick = onTriggerDemoForm,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Practice with Built-In Registration Form")
         }
 
         Spacer(modifier = Modifier.height(10.dp))

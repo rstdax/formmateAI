@@ -20,6 +20,7 @@ class RSTWakeWordEngine(
     private var speechRecognizer: SpeechRecognizer? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private var isRunning = false
+    private var isPaused = false
     private var isRestartScheduled = false
 
     // Phonetic variations that STT engines produce when a user says "Hey RST"
@@ -43,11 +44,31 @@ class RSTWakeWordEngine(
     fun start() {
         if (isRunning) return
         isRunning = true
+        isPaused = false
+        mainHandler.post { initAndStartRecognizer() }
+    }
+
+    fun pause() {
+        isPaused = true
+        isRestartScheduled = false
+        mainHandler.removeCallbacksAndMessages(null)
+        mainHandler.post {
+            try {
+                speechRecognizer?.stopListening()
+                speechRecognizer?.cancel()
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun resume() {
+        if (!isRunning) return
+        isPaused = false
         mainHandler.post { initAndStartRecognizer() }
     }
 
     fun stop() {
         isRunning = false
+        isPaused = false
         isRestartScheduled = false
         mainHandler.removeCallbacksAndMessages(null)
         mainHandler.post {
@@ -63,7 +84,7 @@ class RSTWakeWordEngine(
     }
 
     private fun initAndStartRecognizer() {
-        if (!isRunning) return
+        if (!isRunning || isPaused) return
 
         try {
             if (speechRecognizer == null) {
@@ -80,11 +101,11 @@ class RSTWakeWordEngine(
     }
 
     private fun scheduleRestart(delayMs: Long = 250L) {
-        if (!isRunning || isRestartScheduled) return
+        if (!isRunning || isPaused || isRestartScheduled) return
         isRestartScheduled = true
         mainHandler.postDelayed({
             isRestartScheduled = false
-            if (isRunning) {
+            if (isRunning && !isPaused) {
                 try {
                     speechRecognizer?.cancel()
                 } catch (_: Exception) {}
@@ -95,13 +116,17 @@ class RSTWakeWordEngine(
 
     private val recognitionListener = object : RecognitionListener {
         override fun onReadyForSpeech(params: Bundle?) {
-            onDebugStatus("Active — Say 'Hey RST'")
+            if (!isPaused) {
+                onDebugStatus("Active — Say 'Hey RST'")
+            }
         }
 
         override fun onBeginningOfSpeech() {}
 
         override fun onRmsChanged(rmsdB: Float) {
-            onVolumeChanged(rmsdB.coerceIn(0f, 12f))
+            if (!isPaused) {
+                onVolumeChanged(rmsdB.coerceIn(0f, 12f))
+            }
         }
 
         override fun onBufferReceived(buffer: ByteArray?) {}
@@ -111,6 +136,7 @@ class RSTWakeWordEngine(
         }
 
         override fun onError(error: Int) {
+            if (isPaused) return
             // Reset recognizer instance if client/busy errors occur
             if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY ||
                 error == SpeechRecognizer.ERROR_CLIENT
@@ -127,6 +153,7 @@ class RSTWakeWordEngine(
         }
 
         override fun onResults(results: Bundle?) {
+            if (isPaused) return
             val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
             if (!matches.isNullOrEmpty()) {
                 processSpeechCandidates(matches, isFinal = true)
@@ -135,6 +162,7 @@ class RSTWakeWordEngine(
         }
 
         override fun onPartialResults(partialResults: Bundle?) {
+            if (isPaused) return
             val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
             if (!matches.isNullOrEmpty()) {
                 processSpeechCandidates(matches, isFinal = false)

@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Hey RST</string>
+    <string name="accessibility_service_description">Enables Hey RST to inspect and assist in voice form-filling inside Chrome and other applications when you say &quot;Hey RST&quot;.</string>
 </resources>
