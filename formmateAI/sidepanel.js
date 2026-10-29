@@ -199,6 +199,7 @@ const state = {
 };
 
 const PROFILE_STORAGE_KEYS = ["formmateProfiles", "formmateActiveProfileId"];
+let startRequestInProgress = null;
 const PROFILE_FIELDS = [
   { key: "full_name", label: "Full name", type: "text" },
   { key: "first_name", label: "First name", type: "text" },
@@ -350,9 +351,14 @@ async function respondToProfileConfirmation(accepted) {
   }
   $("waveformHint").textContent = "*tap to speak or pause";
   if (!accepted) {
-    state.stateMachine.transition(Core.States.READY);
-    $("listeningStatus").textContent = "Start Conversation";
-    $("assistantCaption").textContent = "Okay, I won't use the saved profile. You can fill the form manually or start the guided assistant.";
+    const message = "Okay, I won't use the saved profile. Let's fill out the form together.";
+    $("assistantCaption").textContent = message;
+    const turnId = ++state.currentTurnId;
+    speakQuestion(message, turnId, () => {
+      if (state.currentTurnId === turnId && !state.stateMachine.is(Core.States.PAUSED)) {
+        startGuidedFill();
+      }
+    });
     return;
   }
   await fillMatchingProfile();
@@ -784,7 +790,7 @@ function getPreferredVoice(lang) {
   );
 }
 
-function speakQuestion(text, turnId, onComplete) {
+function speakQuestion(text, turnId, onComplete, speechText = text) {
   // If muted or TTS not available
   if (!state.speakEnabled || !("speechSynthesis" in window)) {
     revealAssistantCaption(text, 600);
@@ -804,7 +810,7 @@ function speakQuestion(text, turnId, onComplete) {
     window.speechSynthesis.resume();
   } catch (_) {}
 
-  const utterance = new SpeechSynthesisUtterance(text);
+  const utterance = new SpeechSynthesisUtterance(speechText);
   window._activeSpeechUtterances.add(utterance);
 
   utterance.lang = state.lang;
@@ -819,7 +825,7 @@ function speakQuestion(text, turnId, onComplete) {
   state.stateMachine.transition(Core.States.SPEAKING);
 
   // Estimate speech duration for progressive caption reveal
-  const wordCount = text.split(/\s+/).length;
+  const wordCount = speechText.split(/\s+/).length;
   const estimatedDurationMs = Math.max(1400, Math.min(8500, wordCount * 330));
   revealAssistantCaption(text, estimatedDurationMs);
 
@@ -903,7 +909,7 @@ function setupSpeechRecognition() {
   recognition.lang = state.lang;
   recognition.continuous = false;
   recognition.interimResults = true;
-  recognition.maxAlternatives = 1;
+  recognition.maxAlternatives = 5;
   return recognition;
 }
 
@@ -914,15 +920,51 @@ function clearInactivityTimer() {
   }
 }
 
-function resetInactivityTimer() {
+function resetInactivityTimer(turnId = state.currentTurnId) {
   clearInactivityTimer();
   state.inactivityTimer = setTimeout(() => {
-    // Inactivity timeout expired without final speech response
-    if (state.isListening && state.stateMachine.is(Core.States.LISTENING)) {
-      stopListeningSafely();
-      state.stateMachine.transition(Core.States.WAITING_FOR_TAP);
+    if (state.currentTurnId === turnId &&
+        state.isListening &&
+        state.stateMachine.is(Core.States.LISTENING)) {
+      repeatCurrentQuestion(turnId);
     }
   }, state.inactivityTimeoutMs);
+}
+
+function repeatCurrentQuestion(turnId) {
+  if (state.currentTurnId !== turnId ||
+      state.isProcessingAnswer ||
+      !state.currentFieldId ||
+      state.stateMachine.is(Core.States.PAUSED) ||
+      state.stateMachine.is(Core.States.COMPLETED)) {
+    return;
+  }
+
+  stopListeningSafely();
+  const field = currentField();
+  if (!field) return;
+
+  const lastQuestion = [...state.history].reverse().find(
+    (entry) => entry.role === "assistant" && entry.fieldId === field.id
+  );
+  const promptText = lastQuestion?.text || Core.generateHumanPrompt(field, state.lang);
+  const retryTurnId = ++state.currentTurnId;
+
+  state.history.push({
+    role: "assistant",
+    text: promptText,
+    timestamp: new Date().toLocaleTimeString(),
+    fieldId: field.id,
+    fieldLabel: field.label
+  });
+
+  speakQuestion(promptText, retryTurnId, () => {
+    if (state.currentTurnId === retryTurnId &&
+        !state.stateMachine.is(Core.States.PAUSED)) {
+      soundFX.playListeningStart();
+      startListening();
+    }
+  });
 }
 
 function stopListeningSafely() {
@@ -958,23 +1000,31 @@ function startListening() {
   recognition.onstart = () => {
     state.isListening = true;
     state.stateMachine.transition(Core.States.LISTENING);
-    resetInactivityTimer();
+    resetInactivityTimer(turnId);
   };
 
   recognition.onresult = (event) => {
     let interim = "";
-    let final = "";
+    const finalSegments = [];
+    const finalAlternatives = [];
 
     for (let i = event.resultIndex; i < event.results.length; ++i) {
       if (event.results[i].isFinal) {
-        final += event.results[i][0].transcript;
+        const result = event.results[i];
+        finalSegments.push(result[0].transcript);
+        finalAlternatives.push(
+          Array.from({ length: result.length }, (_, alternativeIndex) =>
+            result[alternativeIndex].transcript
+          )
+        );
       } else {
         interim += event.results[i][0].transcript;
       }
     }
+    const final = finalSegments.join("");
 
     // Reset inactivity timer when speech activity is detected
-    resetInactivityTimer();
+    resetInactivityTimer(turnId);
 
     if (interim) {
       setTranscript(`“${interim}”`);
@@ -985,43 +1035,68 @@ function startListening() {
       clearInactivityTimer();
       stopListeningSafely();
 
-      setTranscript(`“${final.trim()}”`);
+      const field = currentField();
+      const alternativesCount = Math.max(
+        1,
+        ...finalAlternatives.map((alternatives) => alternatives.length)
+      );
+      const transcriptCandidates = Array.from(
+        { length: alternativesCount },
+        (_, alternativeIndex) =>
+          finalAlternatives
+            .map((alternatives) => alternatives[alternativeIndex] || alternatives[0])
+            .join("")
+      );
+      const phoneAnswer = field?.semanticType === "phone"
+        ? transcriptCandidates.find((candidate) => Core.parseSpokenPhone(candidate))
+        : null;
+      const emailAnswer = field?.semanticType === "email"
+        ? transcriptCandidates.map((candidate) => Core.parseSpokenEmail(candidate)).find(Boolean)
+        : null;
+      const answer = (phoneAnswer || emailAnswer || final).trim();
+      setTranscript(`“${answer}”`);
 
       // Log user turn
       state.history.push({
         role: "user",
-        text: final.trim(),
+        text: answer,
         timestamp: new Date().toLocaleTimeString(),
         fieldId: state.currentFieldId,
         fieldLabel: currentField()?.label || "General"
       });
 
-      handleUserAnswer(final.trim(), turnId);
+      handleUserAnswer(answer, turnId);
     }
   };
 
   recognition.onerror = (event) => {
     if (event.error === "no-speech") {
-      // Handled cleanly by inactivity timeout or transition
-      if (state.stateMachine.is(Core.States.LISTENING)) {
-        stopListeningSafely();
-        state.stateMachine.transition(Core.States.WAITING_FOR_TAP);
-      }
+      repeatCurrentQuestion(turnId);
       return;
     }
 
     if (event.error === "not-allowed" || event.error === "service-not-allowed") {
       stopListeningSafely();
       state.stateMachine.transition(Core.States.ERROR);
-      setTranscript("Microphone access denied in Chrome");
+      setTranscript(event.error === "not-allowed"
+        ? "Microphone access denied in Chrome"
+        : "Speech recognition service is unavailable");
+      return;
+    }
+
+    if (event.error === "audio-capture" || event.error === "network" ||
+        event.error === "language-not-supported") {
+      stopListeningSafely();
+      state.stateMachine.transition(Core.States.ERROR);
+      setTranscript(`Speech recognition error: ${event.error}`);
     }
   };
 
   recognition.onend = () => {
     state.isListening = false;
     clearInactivityTimer();
-    if (state.stateMachine.is(Core.States.LISTENING)) {
-      state.stateMachine.transition(Core.States.WAITING_FOR_TAP);
+    if (!finalDelivered && state.stateMachine.is(Core.States.LISTENING)) {
+      repeatCurrentQuestion(turnId);
     }
   };
 
@@ -1159,7 +1234,9 @@ async function handleUserAnswer(rawText, turnId) {
     response = await chrome.tabs.sendMessage(state.tabId, {
       type: "FORMMATE_FILL_FIELD",
       fieldId: field.id,
-      value: rawText
+      value: state.lang.startsWith("hi")
+        ? Core.transliterateHindiToLatin(rawText)
+        : rawText
     });
   } catch (error) {
     response = { success: false, error: "Connection lost. Please scan page again." };
@@ -1186,13 +1263,19 @@ async function handleUserAnswer(rawText, turnId) {
 
     // Speak confirmation, then automatically advance to next field!
     const confirmTurn = ++state.currentTurnId;
+    const spokenConfirmation = field.semanticType === "phone"
+      ? confirmation.replace(
+          response.value,
+          Core.formatPhoneForSpeech(response.value, state.lang)
+        )
+      : confirmation;
     speakQuestion(confirmation, confirmTurn, () => {
       if (next && state.currentTurnId === confirmTurn && !state.stateMachine.is(Core.States.PAUSED)) {
         askQuestionForField(next.id);
       } else if (!next) {
         announceCompletion();
       }
-    });
+    }, spokenConfirmation);
     return;
   }
 
@@ -1614,6 +1697,23 @@ async function scanCurrentPage(startImmediately = false) {
   }
 }
 
+function handlePopupStartRequest() {
+  if (startRequestInProgress) return startRequestInProgress;
+
+  startRequestInProgress = (async () => {
+    const stored = await chrome.storage.local.get("formmateStartAssistantRequest");
+    if (!stored.formmateStartAssistantRequest) return false;
+
+    await chrome.storage.local.remove("formmateStartAssistantRequest");
+    await scanCurrentPage(true);
+    return true;
+  })();
+
+  return startRequestInProgress.finally(() => {
+    startRequestInProgress = null;
+  });
+}
+
 function escapeHtml(val) {
   return String(val ?? "").replace(/[&<>"']/g, (c) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
@@ -1777,6 +1877,15 @@ async function init() {
     showToast("Could not load profiles from extension storage");
   }
   chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName === "local" && changes.formmateStartAssistantRequest?.newValue) {
+      handlePopupStartRequest()
+        .then((started) => started || handlePopupStartRequest())
+        .catch((error) => {
+          console.error("Could not start assistant from popup:", error);
+          showToast("Could not start the assistant");
+        });
+    }
+
     if (areaName !== "local" ||
         (!changes.formmateProfiles && !changes.formmateActiveProfileId)) return;
     const previousActiveProfileId = state.activeProfileId;
@@ -1797,7 +1906,12 @@ async function init() {
       showToast("Could not refresh saved profiles");
     });
   });
-  scanCurrentPage(false);
+  const startedFromPopup = await handlePopupStartRequest().catch((error) => {
+    console.error("Could not check popup assistant start request:", error);
+    showToast("Could not start the assistant");
+    return false;
+  });
+  if (!startedFromPopup) scanCurrentPage(false);
 }
 
 document.addEventListener("DOMContentLoaded", init);

@@ -203,6 +203,20 @@ test("Spoken email with name: 'rohan.das at outlook dot com'", () => {
   assert.strictEqual(Core.parseSpokenEmail("rohan.das at outlook dot com"), "rohan.das@outlook.com");
 });
 
+test("Spoken email phrase 'at the rate' is normalized", () => {
+  assert.strictEqual(
+    Core.parseSpokenEmail("shubhan121b at the rate gmail dot com"),
+    "shubhan121b@gmail.com"
+  );
+});
+
+test("Spoken email digit words in the username are normalized", () => {
+  assert.strictEqual(
+    Core.parseSpokenEmail("shubhan one two one b at the rate gmail dot com"),
+    "shubhan121b@gmail.com"
+  );
+});
+
 test("Spoken phone digits: 'nine eight seven six five four three two one zero'", () => {
   assert.strictEqual(Core.parseSpokenPhone("nine eight seven six five four three two one zero"), "9876543210");
 });
@@ -210,6 +224,20 @@ test("Spoken phone digits: 'nine eight seven six five four three two one zero'",
 test("Formatted phone: '+91 98765 43210'", () => {
   const p = Core.parseSpokenPhone("+91 98765 43210");
   assert.ok(p.includes("9876543210") || p.replace(/\D/g, "").includes("9876543210"));
+});
+
+test("Phone speech format reads each English digit separately", () => {
+  assert.strictEqual(
+    Core.formatPhoneForSpeech("9876543210"),
+    "nine, eight, seven, six, five, four, three, two, one, zero"
+  );
+});
+
+test("Phone speech format reads each Hindi digit separately", () => {
+  assert.strictEqual(
+    Core.formatPhoneForSpeech("9876543210", "hi-IN"),
+    "नौ, आठ, सात, छह, पाँच, चार, तीन, दो, एक, शून्य"
+  );
 });
 
 console.log("\n=== 5. CONVERSATIONAL COMMAND RECOGNITION (BUG C) ===");
@@ -251,6 +279,15 @@ test("Regular answer is NOT a command: 'Rohan Ranjan Das'", () => {
 });
 
 console.log("\n=== 6. CONVERSATIONAL FRAMING STRIPPER ===");
+
+test("Hindi answers are transliterated into Latin script, not translated", () => {
+  assert.strictEqual(Core.transliterateHindiToLatin("शुभम"), "shubham");
+  assert.strictEqual(Core.transliterateHindiToLatin("मेरा नाम"), "meraa naam");
+});
+
+test("Hindi numerals are converted to standard form digits", () => {
+  assert.strictEqual(Core.transliterateHindiToLatin("१२३४५६"), "123456");
+});
 
 test("Strip: 'My name is Rohan Ranjan Das' -> 'Rohan Ranjan Das'", () => {
   assert.strictEqual(Core.stripConversationalFraming("My name is Rohan Ranjan Das", "full_name"), "rohan ranjan das");

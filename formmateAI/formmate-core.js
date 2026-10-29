@@ -37,6 +37,72 @@
       .trim();
   }
 
+  function transliterateHindiToLatin(value) {
+    const consonants = {
+      क: "k", ख: "kh", ग: "g", घ: "gh", ङ: "ng",
+      च: "ch", छ: "chh", ज: "j", झ: "jh", ञ: "ny",
+      ट: "t", ठ: "th", ड: "d", ढ: "dh", ण: "n",
+      त: "t", थ: "th", द: "d", ध: "dh", न: "n",
+      प: "p", फ: "ph", ब: "b", भ: "bh", म: "m",
+      य: "y", र: "r", ल: "l", व: "v", श: "sh",
+      ष: "sh", स: "s", ह: "h",
+      "क़": "q", "ख़": "kh", "ग़": "gh", "ज़": "z", "ड़": "r",
+      "ढ़": "rh", "फ़": "f"
+    };
+    const independentVowels = {
+      अ: "a", आ: "aa", इ: "i", ई: "i", उ: "u", ऊ: "oo",
+      ऋ: "ri", ए: "e", ऐ: "ai", ओ: "o", औ: "au"
+    };
+    const vowelSigns = {
+      "ा": "aa", "ि": "i", "ी": "i", "ु": "u", "ू": "oo",
+      "ृ": "ri", "े": "e", "ै": "ai", "ो": "o", "ौ": "au"
+    };
+    const digits = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
+    const devanagariDigits = "०१२३४५६७८९";
+    const text = String(value || "");
+
+    return text.split(/(\s+)/).map((word) => {
+      if (!word || /^\s+$/.test(word)) return word;
+
+      let output = "";
+      let endsWithInherentVowel = false;
+      for (const character of word) {
+        const digitIndex = devanagariDigits.indexOf(character);
+        if (digitIndex >= 0) {
+          output += digits[digitIndex];
+          endsWithInherentVowel = false;
+        } else if (consonants[character]) {
+          output += `${consonants[character]}a`;
+          endsWithInherentVowel = true;
+        } else if (independentVowels[character]) {
+          output += independentVowels[character];
+          endsWithInherentVowel = false;
+        } else if (vowelSigns[character]) {
+          if (endsWithInherentVowel) output = output.slice(0, -1);
+          output += vowelSigns[character];
+          endsWithInherentVowel = false;
+        } else if (character === "्") {
+          if (endsWithInherentVowel) output = output.slice(0, -1);
+          endsWithInherentVowel = false;
+        } else if (character === "़" || character === "‍" || character === "‌") {
+          continue;
+        } else if (character === "ं" || character === "ँ") {
+          output += "n";
+          endsWithInherentVowel = false;
+        } else if (character === "ः") {
+          output += "h";
+          endsWithInherentVowel = false;
+        } else {
+          output += character;
+          endsWithInherentVowel = false;
+        }
+      }
+
+      if (endsWithInherentVowel) output = output.slice(0, -1);
+      return output;
+    }).join("");
+  }
+
   // --- Spoken Numbers & Word Mappings ---
 
   const SMALL_NUMBERS = {
@@ -515,13 +581,28 @@
     let text = String(rawInput || "").trim();
     if (!text) return null;
 
-    // Convert spoken tokens: "rohan at gmail dot com" -> "rohan@gmail.com"
-    let converted = text
-      .toLowerCase()
-      .replace(/\s+at\s+/g, "@")
-      .replace(/\s+dot\s+/g, ".")
+    // Convert common spoken email terms before removing spaces.
+    let converted = text.toLowerCase()
+      .replace(/\s+at\s+(?:the\s+)?rate\s+/g, " @ ")
+      .replace(/\s+at\s+/g, " @ ")
+      .replace(/\s+(?:dot|period|full stop)\s+/g, " . ")
       .replace(/\s+underscore\s+/g, "_")
-      .replace(/\s+dash\s+/g, "-")
+      .replace(/\s+(?:dash|hyphen)\s+/g, "-");
+
+    const atIndex = converted.indexOf("@");
+    if (atIndex >= 0) {
+      const spokenDigits = {
+        zero: "0", one: "1", two: "2", three: "3", four: "4",
+        five: "5", six: "6", seven: "7", eight: "8", nine: "9"
+      };
+      const localPart = converted.slice(0, atIndex).replace(
+        /\b(zero|one|two|three|four|five|six|seven|eight|nine)\b/g,
+        (word) => spokenDigits[word]
+      );
+      converted = `${localPart}${converted.slice(atIndex)}`;
+    }
+
+    converted = converted
       .replace(/\s+/g, "");
 
     const match = converted.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i);
@@ -571,6 +652,20 @@
     }
 
     return null;
+  }
+
+  function formatPhoneForSpeech(value, lang = "en-IN") {
+    const digits = String(value || "").replace(/\D/g, "");
+    if (!digits) return String(value || "");
+
+    const digitWords = String(lang).startsWith("hi")
+      ? ["शून्य", "एक", "दो", "तीन", "चार", "पाँच", "छह", "सात", "आठ", "नौ"]
+      : ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"];
+
+    return digits
+      .split("")
+      .map((digit) => digitWords[Number(digit)])
+      .join(", ");
   }
 
   // --- Conversational Commands Recognition ---
@@ -830,6 +925,7 @@
   return {
     normalizeText,
     cleanPunctuation,
+    transliterateHindiToLatin,
     stripConversationalFraming,
     parseOrdinal,
     matchOption,
@@ -837,6 +933,7 @@
     parseSpokenDate,
     parseSpokenEmail,
     parseSpokenPhone,
+    formatPhoneForSpeech,
     recognizeCommand,
     ConversationStateMachine,
     States,

@@ -108,6 +108,24 @@ function openEditor(profile = null) {
   $("profileName").focus();
 }
 
+$("profileEditor").addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" || !(event.target instanceof HTMLInputElement)) return;
+
+  event.preventDefault();
+  const inputs = [
+    $("profileName"),
+    ...$("profileFields").querySelectorAll("input")
+  ];
+  const currentIndex = inputs.indexOf(event.target);
+  const nextInput = inputs[currentIndex + 1];
+
+  if (nextInput) {
+    nextInput.focus();
+  } else if (currentIndex >= 0) {
+    $("saveProfileBtn").focus();
+  }
+});
+
 function closeEditor() {
   $("profileEditor").hidden = true;
   $("profileEditor").dataset.profileId = "";
@@ -213,9 +231,13 @@ openButton.addEventListener("click", async () => {
       path: "sidepanel.html",
       enabled: true
     });
+    await chrome.storage.local.set({ formmateStartAssistantRequest: Date.now() });
     await chrome.sidePanel.open({ tabId: tab.id });
     window.close();
   } catch (error) {
+    await chrome.storage.local.remove("formmateStartAssistantRequest").catch((storageError) => {
+      console.error("Could not clear assistant start request:", storageError);
+    });
     statusLine.textContent = error?.message || "Could not open the side panel. Try again on a normal webpage.";
     openButton.disabled = false;
   }
