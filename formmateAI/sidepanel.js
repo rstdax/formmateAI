@@ -1862,7 +1862,6 @@ async function init() {
   $("profilesBtn")?.addEventListener("click", () => { soundFX.playTap(); openProfilesModal(); });
   $("settingsBtn")?.addEventListener("click", () => { soundFX.playTap(); openSettingsModal(); });
   $("editCurrentFieldBtn")?.addEventListener("click", () => { soundFX.playTap(); openEditModal(); });
-  $("viewTranscriptBtn")?.addEventListener("click", () => { soundFX.playTap(); openTranscriptModal(); });
   $("endSessionBtn")?.addEventListener("click", () => { soundFX.playTap(); endSessionSafely(); });
 
   // Edit modal buttons

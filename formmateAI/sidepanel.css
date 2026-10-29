@@ -598,24 +598,6 @@ button {
   stroke-linejoin: round;
 }
 
-.transcript-history-btn {
-  width: 44px;
-  height: 44px;
-  border: 1px solid #d1d2d5;
-  border-radius: 50%;
-  background: #fff;
-  display: grid;
-  place-items: center;
-  color: #505662;
-  transition: all .16s;
-}
-
-.transcript-history-btn:hover {
-  background: #f3f4f6;
-  color: #171b25;
-  transform: translateY(-1px);
-}
-
 /* --- Actions Footer --- */
 .actions {
   margin: 14px -24px -21px;
@@ -1136,11 +1118,6 @@ button {
     min-width: 90px;
     height: 40px;
     font-size: 14px;
-  }
-
-  .transcript-history-btn {
-    width: 40px;
-    height: 40px;
   }
 
   .actions {
