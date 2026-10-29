@@ -353,14 +353,29 @@ test("Likely name spelling is suggested, not silently corrected", () => {
   assert.strictEqual(Core.suggestNameCorrection("Rohan Ranjan Das", "full_name"), null);
 });
 
+test("Free-form answers preserve casing, punctuation, and wording", () => {
+  assert.strictEqual(
+    Core.normalizeSpeechAnswer("McDonald, Apt. 4B — don't enter via Main St.", "general"),
+    "McDonald, Apt. 4B — don't enter via Main St."
+  );
+  assert.strictEqual(
+    Core.normalizeSpeechAnswer("My name is Rohan Das!", "full_name"),
+    "Rohan Das!"
+  );
+  assert.strictEqual(
+    Core.normalizeSpeechAnswer("मेरा पता, गली नंबर 4!", "general"),
+    "मेरा पता, गली नंबर 4!"
+  );
+});
+
 test("Address speech variants are corrected only for known address terms", () => {
   assert.strictEqual(
     Core.normalizeSpeechAnswer("My address is 12 Main rode, neer Green Park", "address"),
-    "12 main road near green park"
+    "12 Main road, near Green Park"
   );
   assert.strictEqual(
     Core.normalizeSpeechAnswer("Flat 4, Behined the old post office", "address"),
-    "flat 4 behind the old post office"
+    "Flat 4, Behind the old post office"
   );
 });
 
@@ -370,14 +385,14 @@ test("Additional Indian address terms and speech variants are normalized", () =>
       "Flat 12 houseno 4, appartment near bustand, koloni road",
       "address"
     ),
-    "flat 12 house number 4 apartment near bus stand colony road"
+    "Flat 12 house number 4, apartment near bus stand, colony road"
   );
   assert.strictEqual(
     Core.normalizeSpeechAnswer(
       "Behind the hospitel, sector 5, mainrode",
       "address"
     ),
-    "behind the hospital sector 5 main road"
+    "Behind the hospital, sector 5, main road"
   );
 });
 

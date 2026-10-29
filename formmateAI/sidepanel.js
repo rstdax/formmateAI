@@ -1363,9 +1363,7 @@ async function handleUserAnswer(rawText, turnId, skipNameCorrection = false) {
     response = await chrome.tabs.sendMessage(state.tabId, {
       type: "FORMMATE_FILL_FIELD",
       fieldId: field.id,
-      value: state.lang.startsWith("hi")
-        ? Core.transliterateHindiToLatin(rawText)
-        : rawText
+      value: rawText
     });
   } catch (error) {
     response = { success: false, error: "Connection lost. Please scan page again." };

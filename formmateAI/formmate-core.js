@@ -534,13 +534,16 @@
   }
 
   function normalizeAddressSpeech(rawInput) {
-    const cleaned = stripConversationalFraming(rawInput, "address");
+    const cleaned = stripConversationalFramingPreservingText(rawInput, "address");
     if (!cleaned) return "";
 
-    return normalizeText(cleaned)
-      .split(" ")
-      .map((word) => ADDRESS_SPEECH_ALIASES[word] || word)
-      .join(" ");
+    return cleaned.replace(/\p{L}+/gu, (word) => {
+      const replacement = ADDRESS_SPEECH_ALIASES[normalizeText(word)];
+      if (!replacement) return word;
+      return word[0] === word[0].toUpperCase()
+        ? replacement[0].toUpperCase() + replacement.slice(1)
+        : replacement;
+    });
   }
 
   // --- Conversational Framing Stripper ---
@@ -589,6 +592,23 @@
       .trim();
 
     return cleanPunctuation(cleaned);
+  }
+
+  function stripConversationalFramingPreservingText(rawInput, semanticType) {
+    let text = String(rawInput || "").trim();
+    const prefixes = {
+      full_name: /^(?:my\s+full\s+name\s+is|my\s+name\s+is|full\s+name\s+is|name\s+is|this\s+is)\s+/i,
+      first_name: /^(?:my\s+first\s+name\s+is|first\s+name\s+is|my\s+name\s+is|name\s+is)\s+/i,
+      last_name: /^(?:my\s+(?:last|family)\s+name\s+is|(?:last|family)\s+name\s+is)\s+/i,
+      guardian_name: /^(?:(?:my\s+)?(?:father|mother|parent|guardian)(?:'s)?\s+name\s+is|my\s+name\s+is|name\s+is)\s+/i,
+      address: /^(?:my\s+address\s+is|address\s+is|residential\s+address\s+is)\s+/i,
+      city: /^(?:my\s+city\s+is|city\s+is|i\s+live\s+in)\s+/i,
+      district: /^(?:my\s+district\s+is|district\s+is)\s+/i,
+      state: /^(?:my\s+state\s+is|the\s+state\s+is|state\s+is|i\s+live\s+in|i\s+reside\s+in|i\s+am\s+from)\s+/i
+    };
+    const prefix = prefixes[semanticType];
+    if (prefix) text = text.replace(prefix, "").trim();
+    return text;
   }
 
   // --- Ordinal Selection Parser ---
@@ -1091,7 +1111,7 @@
     if (semanticType === "address") {
       return normalizeAddressSpeech(raw) || raw;
     }
-    return stripConversationalFraming(raw, semanticType) || raw;
+    return stripConversationalFramingPreservingText(raw, semanticType) || raw;
   }
 
   function formatPhoneForSpeech(value, lang = "en-IN") {

@@ -486,21 +486,11 @@
       } catch (_) {}
     }
 
-    // --- GENERAL TEXT & TEXTAREA (Clean conversational prefixes) ---
-    const cleanedValue = Core.stripConversationalFraming(value, item.semanticType);
-    // Use cleanedValue if sensible, otherwise preserve original value
-    const finalVal = cleanedValue && cleanedValue.length >= 2 ? cleanedValue : value;
-
-    // Capitalize names properly if semantic type is a name
-    let displayVal = finalVal;
-    if (["full_name", "first_name", "last_name", "guardian_name"].includes(item.semanticType)) {
-      displayVal = finalVal.replace(/\b[a-z]/g, (c) => c.toUpperCase());
-    }
-
-    setNativeValue(el, displayVal);
+    // Keep free-form wording, casing, and punctuation as recognized.
+    setNativeValue(el, value);
     el.focus({ preventScroll: true });
 
-    return { success: true, value: displayVal, fieldId };
+    return { success: true, value, fieldId };
   }
 
   // --- MESSAGE LISTENER ---

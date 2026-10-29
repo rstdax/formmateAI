@@ -287,8 +287,8 @@ function createMockScanner(dom) {
       return { success: true, value: e, fieldId };
     }
 
-    // General text (clean framing)
-    const cleaned = Core.stripConversationalFraming(value, item.semanticType);
+    // Match production handling: keep recognized free-form text intact.
+    const cleaned = Core.normalizeSpeechAnswer(value, item.semanticType);
     item.element.value = cleaned || value;
     item.element.dispatchEvent({ type: "input" });
     return { success: true, value: item.element.value, fieldId };
@@ -374,7 +374,7 @@ test("BUG B: Answering State with 'My state is Assam' NEVER modifies Full Name",
 test("BUG B: Answering Full Name with 'My name is Rohan Ranjan Das' updates Full Name properly", () => {
   const res = scanner.fillField(fullNameField.id, "My name is Rohan Ranjan Das");
   assert.strictEqual(res.success, true);
-  assert.strictEqual(dom.fullName.value, "rohan ranjan das");
+  assert.strictEqual(dom.fullName.value, "Rohan Ranjan Das");
 });
 
 // --- BUG D TESTS (CHECKBOX NEGATION & INTEGRITY) ---
