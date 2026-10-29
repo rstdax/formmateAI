@@ -165,6 +165,25 @@
     </section>
   </main>
 
+  <!-- MODAL: MICROPHONE ACCESS -->
+  <div id="microphonePermissionOverlay" class="glass-modal-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="microphonePermissionTitle" aria-describedby="microphonePermissionMessage">
+    <div class="glass-modal-card settings-modal-card">
+      <div class="modal-top">
+        <div>
+          <span class="field-micro-label">VOICE SETUP</span>
+          <h3 id="microphonePermissionTitle" class="modal-title">Enable microphone access</h3>
+        </div>
+      </div>
+      <p id="microphonePermissionMessage" class="modal-subtitle">Formmate needs microphone access for voice input. Chrome will ask you to allow it. The microphone is only used while you are speaking with Formmate.</p>
+      <p id="microphonePermissionHelp" class="setting-hint microphone-permission-help" hidden></p>
+      <div class="modal-actions microphone-permission-actions">
+        <button id="skipMicrophonePermissionBtn" class="secondary-pill" type="button">Continue without voice</button>
+        <button id="openMicrophoneSettingsBtn" class="secondary-pill" type="button" hidden>Open microphone settings</button>
+        <button id="requestMicrophonePermissionBtn" class="primary-gradient-pill" type="button">Turn on microphone</button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: SAVED PROFILES -->
   <div id="profilesModalOverlay" class="glass-modal-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="profilesModalTitle">
     <div class="glass-modal-card settings-modal-card">

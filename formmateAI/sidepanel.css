@@ -770,6 +770,18 @@ button {
   margin: 0;
 }
 
+.microphone-permission-help {
+  padding: 11px 12px;
+  border: 1px solid #f0d6aa;
+  border-radius: 10px;
+  background: #fffaf1;
+  color: #73531f;
+}
+
+.microphone-permission-actions {
+  flex-wrap: wrap;
+}
+
 .modal-close-btn {
   width: 32px;
   height: 32px;

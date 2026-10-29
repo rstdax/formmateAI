@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f3f6fb">
+  <title>Microphone access · Formmate</title>
+  <link rel="stylesheet" href="microphone-permission.css">
+</head>
+<body>
+  <main class="permission-page">
+    <section class="permission-card" aria-labelledby="pageTitle">
+      <div class="brand"><span class="brand-mark">F</span><span>FORMMATE</span></div>
+      <div class="mic-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="2" width="6" height="12" rx="3"></rect>
+          <path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"></path>
+        </svg>
+      </div>
+      <p class="eyebrow">VOICE SETUP</p>
+      <h1 id="pageTitle">Allow microphone access</h1>
+      <p id="permissionMessage" class="message" role="status" aria-live="polite">Chrome will ask whether Formmate can use your microphone. Choose Allow to use voice input.</p>
+      <div class="privacy-note">Formmate checks that microphone access works, then stops the microphone. It does not record or send audio from this permission check.</div>
+      <div class="actions">
+        <button id="retryPermissionBtn" class="primary" type="button" hidden>Try again</button>
+        <button id="openSettingsBtn" class="secondary" type="button" hidden>Open microphone settings</button>
+        <button id="closePermissionPageBtn" class="primary" type="button" hidden>Return to Formmate</button>
+      </div>
+      <p id="permissionHelp" class="help" hidden></p>
+    </section>
+  </main>
+  <script src="microphone-permission.js"></script>
+</body>
+</html>

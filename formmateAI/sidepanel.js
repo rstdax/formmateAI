@@ -186,6 +186,7 @@ const state = {
   recognition: null,
   isListening: false,
   isSpeaking: false,
+  microphonePermissionState: "unknown",
   isProcessingAnswer: false,
   inactivityTimer: null,
   sessionSeconds: 0,
@@ -921,6 +922,76 @@ function clearInactivityTimer() {
   }
 }
 
+function showMicrophonePermissionPrompt(permissionState = "prompt", helpText = "") {
+  state.microphonePermissionState = permissionState;
+  const overlay = $("microphonePermissionOverlay");
+  const message = $("microphonePermissionMessage");
+  const help = $("microphonePermissionHelp");
+  const requestButton = $("requestMicrophonePermissionBtn");
+  const settingsButton = $("openMicrophoneSettingsBtn");
+  if (!overlay) return;
+
+  message.textContent = helpText && permissionState === "denied"
+    ? "Chrome or your operating system blocked microphone access. You can try again or allow it in microphone settings."
+    : "Formmate needs microphone access for voice input. Click Turn on microphone and Chrome will ask you to allow it. The microphone is only used while you are speaking with Formmate.";
+  requestButton.textContent = "Turn on microphone";
+  settingsButton.hidden = !(helpText && permissionState === "denied");
+  help.textContent = helpText;
+  help.hidden = !helpText;
+  overlay.hidden = false;
+}
+
+function hideMicrophonePermissionPrompt() {
+  $("microphonePermissionOverlay").hidden = true;
+}
+
+async function initializeMicrophonePermission() {
+  try {
+    if (!navigator.permissions?.query) throw new Error("Permissions API unavailable");
+    const permissionStatus = await navigator.permissions.query({ name: "microphone" });
+    const updatePrompt = () => {
+      if (permissionStatus.state === "granted") {
+        state.microphonePermissionState = "granted";
+        hideMicrophonePermissionPrompt();
+      } else if (permissionStatus.state === "denied" &&
+          !$("microphonePermissionOverlay").hidden &&
+          !$("microphonePermissionHelp").hidden) {
+        state.microphonePermissionState = "denied";
+      } else {
+        showMicrophonePermissionPrompt(permissionStatus.state);
+      }
+    };
+    permissionStatus.onchange = updatePrompt;
+    updatePrompt();
+  } catch (_) {
+    showMicrophonePermissionPrompt("prompt");
+  }
+}
+
+function requestMicrophonePermission() {
+  const button = $("requestMicrophonePermissionBtn");
+  button.disabled = true;
+  button.textContent = "Opening permission page…";
+  chrome.tabs.create({ url: chrome.runtime.getURL("microphone-permission.html") }, () => {
+    if (chrome.runtime.lastError) {
+      showMicrophonePermissionPrompt("prompt", "Chrome could not open the microphone permission page. Try opening the extension in a normal tab, or check Chrome microphone settings.");
+    } else {
+      $("microphonePermissionMessage").textContent = "A new tab is open. Allow microphone access there, then return to Formmate. Choose the persistent Allow option if Chrome offers one.";
+    }
+    button.disabled = false;
+    button.textContent = "Open permission page";
+  });
+}
+
+function openMicrophoneSettings() {
+  const settingsUrl = `chrome://settings/content/siteDetails?site=${encodeURIComponent(location.origin)}`;
+  chrome.tabs.create({ url: settingsUrl }, () => {
+    if (chrome.runtime.lastError) {
+      chrome.tabs.create({ url: "chrome://settings/content/microphone" });
+    }
+  });
+}
+
 function resetInactivityTimer(turnId = state.currentTurnId) {
   clearInactivityTimer();
   state.inactivityTimer = setTimeout(() => {
@@ -979,6 +1050,11 @@ function stopListeningSafely() {
 }
 
 function startListening() {
+  if (state.microphonePermissionState !== "granted") {
+    showMicrophonePermissionPrompt(state.microphonePermissionState === "denied" ? "denied" : "prompt");
+    return;
+  }
+
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
     state.stateMachine.transition(Core.States.ERROR);
@@ -1087,6 +1163,10 @@ function startListening() {
     if (event.error === "not-allowed" || event.error === "service-not-allowed") {
       stopListeningSafely();
       state.stateMachine.transition(Core.States.ERROR);
+      if (event.error === "not-allowed") {
+        state.microphonePermissionState = "denied";
+        showMicrophonePermissionPrompt("denied", "Use the Open microphone settings button to allow access, then return and click Turn on microphone again.");
+      }
       setTranscript(event.error === "not-allowed"
         ? "Microphone access denied in Chrome"
         : "Speech recognition service is unavailable");
@@ -1773,6 +1853,33 @@ function escapeHtml(val) {
 // --- Initialization & Event Binding ---
 
 async function init() {
+  $("requestMicrophonePermissionBtn")?.addEventListener("click", () => {
+    soundFX.playTap();
+    requestMicrophonePermission();
+  });
+  $("openMicrophoneSettingsBtn")?.addEventListener("click", () => {
+    soundFX.playTap();
+    openMicrophoneSettings();
+  });
+  $("skipMicrophonePermissionBtn")?.addEventListener("click", () => {
+    soundFX.playTap();
+    hideMicrophonePermissionPrompt();
+  });
+  initializeMicrophonePermission();
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message?.type !== "FORMMATE_MIC_PERMISSION_RESULT") return;
+    if (message.granted) {
+      state.microphonePermissionState = "granted";
+      hideMicrophonePermissionPrompt();
+      showToast("Microphone is ready for voice input");
+      return;
+    }
+    showMicrophonePermissionPrompt(
+      message.blocked ? "denied" : "prompt",
+      message.helpText || "Microphone access was not granted. Choose Allow in Chrome's permission prompt, then try again."
+    );
+  });
+
   // Voice control action (used for waveform and hero button)
   const handleVoiceTap = () => {
     soundFX.playTap();

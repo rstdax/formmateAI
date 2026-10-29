@@ -1,0 +1,89 @@
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #202b3c;
+  background: #f3f6fb;
+  font-synthesis: none;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background: radial-gradient(circle at 50% 0, #e6edf7, transparent 45%), #f3f6fb;
+}
+
+.permission-page {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+}
+
+.permission-card {
+  width: min(100%, 460px);
+  padding: 34px 38px;
+  border: 1px solid #dfe6ee;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 18px 55px #26384d16;
+  text-align: center;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  color: #30445d;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .1em;
+}
+
+.brand-mark {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 8px;
+  background: #214f7b;
+  color: #fff;
+  font-size: 14px;
+  letter-spacing: 0;
+}
+
+.mic-icon {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  margin: 27px auto 17px;
+  border-radius: 50%;
+  background: #edf3f9;
+  color: #285b88;
+}
+
+.mic-icon svg { width: 27px; height: 27px; }
+.eyebrow { margin: 0 0 8px; color: #64758a; font-size: 10px; font-weight: 750; letter-spacing: .12em; }
+h1 { margin: 0; color: #203954; font-size: 24px; letter-spacing: -.03em; }
+.message { margin: 10px 0 0; color: #59697c; font-size: 14px; line-height: 1.6; }
+.privacy-note { margin-top: 20px; padding: 12px 14px; border: 1px solid #dce5ed; border-radius: 8px; background: #f7f9fb; color: #526477; font-size: 12px; line-height: 1.55; text-align: left; }
+.actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 9px; margin-top: 22px; }
+button { min-height: 42px; padding: 10px 17px; border: 1px solid transparent; border-radius: 8px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+button:focus-visible { outline: 3px solid #d8ae5c; outline-offset: 2px; }
+button:disabled { cursor: wait; opacity: .7; }
+.primary { background: #214f7b; color: #fff; }
+.primary:hover { background: #183f65; }
+.secondary { border-color: #c3ceda; background: #fff; color: #42566d; }
+.secondary:hover { background: #f4f7f9; }
+.help { margin: 16px 0 0; color: #755622; font-size: 12px; line-height: 1.5; }
+
+@media (max-width: 480px) {
+  .permission-page { padding: 16px; }
+  .permission-card { padding: 28px 22px; }
+  h1 { font-size: 21px; }
+  .actions { flex-direction: column; }
+  .actions button { width: 100%; }
+}
