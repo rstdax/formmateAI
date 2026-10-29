@@ -148,6 +148,10 @@ object ProfileStorage {
         prefs.edit().putString(KEY_ACTIVE_ID, profileId).apply()
     }
 
+    fun setActiveProfile(context: Context, profileId: String) {
+        setActiveProfileId(context, profileId)
+    }
+
     private fun getActiveProfileId(context: Context): String {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         return prefs.getString(KEY_ACTIVE_ID, "") ?: ""
@@ -163,16 +167,18 @@ object ProfileStorage {
     }
 
     fun getValueForSemanticType(profile: UserProfile, semanticType: SemanticType): String? {
-        return when (semanticType) {
+        val raw = when (semanticType) {
             SemanticType.FULL_NAME -> profile.fullName.ifBlank { "${profile.firstName} ${profile.lastName}".trim() }
-            SemanticType.FIRST_NAME -> profile.firstName
-            SemanticType.LAST_NAME -> profile.lastName
+            SemanticType.FIRST_NAME -> profile.firstName.ifBlank { profile.fullName.split(" ").firstOrNull() ?: "" }
+            SemanticType.LAST_NAME -> profile.lastName.ifBlank { profile.fullName.split(" ").drop(1).joinToString(" ") }
             SemanticType.EMAIL -> profile.email
             SemanticType.PHONE -> profile.phone
             SemanticType.DATE_OF_BIRTH, SemanticType.DATE -> profile.dateOfBirth
             SemanticType.GENDER -> profile.gender
             SemanticType.GUARDIAN_NAME -> profile.guardianName
-            SemanticType.ADDRESS -> profile.streetAddress
+            SemanticType.ADDRESS -> profile.streetAddress.ifBlank {
+                listOf(profile.city, profile.district, profile.state).filter { it.isNotBlank() }.joinToString(", ")
+            }
             SemanticType.CITY -> profile.city
             SemanticType.DISTRICT -> profile.district
             SemanticType.STATE -> profile.state
@@ -184,6 +190,27 @@ object ProfileStorage {
             SemanticType.EDUCATION -> profile.education
             SemanticType.INSTITUTION -> profile.institution
             else -> null
-        }.takeIf { !it.isNullOrBlank() }
+        }
+        return raw?.takeIf { it.isNotBlank() }
+    }
+
+    /**
+     * Identifies all scanned form fields that have matching saved information in the given user profile.
+     */
+    fun getMatchingFields(profile: UserProfile, fields: List<FormField>): List<Pair<FormField, String>> {
+        val matches = mutableListOf<Pair<FormField, String>>()
+        for (field in fields) {
+            if (field.kind == FieldKind.CHECKBOX || field.semanticType == SemanticType.CONSENT) {
+                continue
+            }
+            if (field.isFilled) {
+                continue
+            }
+            val value = getValueForSemanticType(profile, field.semanticType)
+            if (!value.isNullOrBlank()) {
+                matches.add(Pair(field, value))
+            }
+        }
+        return matches
     }
 }

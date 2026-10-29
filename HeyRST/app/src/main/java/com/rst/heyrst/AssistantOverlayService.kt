@@ -86,6 +86,9 @@ class AssistantOverlayService : LifecycleService(), SavedStateRegistryOwner, Vie
     private var formFields by mutableStateOf<List<FormField>>(emptyList())
     private var currentFieldIndex by mutableIntStateOf(0)
     private var currentHistoryId: String? = null
+    private var isProfileConfirmationPending by mutableStateOf(false)
+    private var pendingMatchingFields by mutableStateOf<List<Pair<FormField, String>>>(emptyList())
+    private var pendingProfileName by mutableStateOf("")
 
     // 8-Second Inactivity Watchdog
     private val inactivityRunnable = Runnable {
@@ -190,8 +193,8 @@ class AssistantOverlayService : LifecycleService(), SavedStateRegistryOwner, Vie
         }
 
         val notification: Notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Hey RST Form Companion Active")
-            .setContentText("Say \"Hey RST\" inside Chrome anytime to fill forms")
+            .setContentTitle("Formate AI Active")
+            .setContentText("Say \"Formate AI\" or \"Hey RST\" inside Chrome anytime to fill forms")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setOngoing(true)
             .build()
@@ -247,29 +250,30 @@ class AssistantOverlayService : LifecycleService(), SavedStateRegistryOwner, Vie
             formFields = scanned
             currentFieldIndex = 0
 
-            // Capture screenshot thumbnail for history
+            // Capture screenshot thumbnail & real webpage title for history
+            val realTitle = RSTAccessibilityService.getActiveWebpageTitle()
             RSTAccessibilityService.captureScreenThumbnail(applicationContext) { thumbPath ->
                 mainHandler.post {
-                    val formTitle = scanned.firstOrNull()?.let {
-                        if (it.label.isNotBlank() && it.label != "Form Field") "${it.label} Application" else "Online Registration Form"
-                    } ?: "Online Registration Form"
+                    val now = java.util.Date()
+                    val dateFormatted = java.text.SimpleDateFormat("dd MMM yyyy", java.util.Locale.getDefault()).format(now)
+                    val timeFormatted = java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault()).format(now)
 
                     val item = FormHistoryItem(
-                        title = formTitle,
-                        dateTime = "Today",
-                        timeBadge = "⚡ Just Now",
+                        title = realTitle,
+                        dateTime = dateFormatted,
+                        timeBadge = timeFormatted,
                         status = "In Progress",
                         progressPercent = 10,
                         thumbnailPath = thumbPath,
-                        categoryIcon = "⚡"
+                        filledFieldsCount = 0,
+                        totalFieldsCount = scanned.size
                     )
                     currentHistoryId = item.id
                     FormHistoryStorage.addHistoryItem(applicationContext, item)
                 }
             }
 
-            showOverlayUI()
-            startConversationalLoop()
+            checkAndPromptProfileAutofillOrStart()
         } else {
             // No fields detected on current screen; offer quick demo form or prompt user
             showOverlayUI()
@@ -294,14 +298,149 @@ class AssistantOverlayService : LifecycleService(), SavedStateRegistryOwner, Vie
             timeBadge = "⚡ Demo",
             status = "In Progress",
             progressPercent = 10,
-            categoryIcon = "⚡",
-            isDemo = true
+            filledFieldsCount = 0,
+            totalFieldsCount = formFields.size
         )
         currentHistoryId = item.id
         FormHistoryStorage.addHistoryItem(applicationContext, item)
 
-        showOverlayUI()
-        startConversationalLoop()
+        checkAndPromptProfileAutofillOrStart()
+    }
+
+    /**
+     * Inspects active saved profile. If matching fields exist, asks the user first before autofilling all at once!
+     */
+    private fun checkAndPromptProfileAutofillOrStart() {
+        val activeProfile = ProfileStorage.getActiveProfile(this)
+        val matches = if (activeProfile != null) ProfileStorage.getMatchingFields(activeProfile, formFields) else emptyList()
+
+        if (activeProfile != null && matches.isNotEmpty()) {
+            isProfileConfirmationPending = true
+            pendingMatchingFields = matches
+            pendingProfileName = activeProfile.profileName.ifBlank { "Personal" }
+
+            val fieldSummary = matches.take(3).joinToString(", ") { it.first.label }
+            val andMore = if (matches.size > 3) " and ${matches.size - 3} more" else ""
+
+            val prompt = if (isHindi) {
+                "मुझे आपके “$pendingProfileName” प्रोफ़ाइल से ${matches.size} विवरण मिले हैं ($fieldSummary$andMore)। क्या मैं इन्हें एक साथ भर दूँ? हाँ या ना कहें।"
+            } else {
+                "I found ${matches.size} saved details in your \"$pendingProfileName\" profile ($fieldSummary$andMore). Shall I autofill them all at once? Say yes or no."
+            }
+
+            currentPrompt = prompt
+            showOverlayUI()
+            speakAssistant(prompt)
+        } else {
+            isProfileConfirmationPending = false
+            pendingMatchingFields = emptyList()
+            currentFieldIndex = 0
+            showOverlayUI()
+            startConversationalLoop()
+        }
+    }
+
+    /**
+     * Executes batch autofill across all matching profile fields sequentially with safe delays, then continues with remaining ones.
+     */
+    fun acceptProfileAutofill() {
+        isProfileConfirmationPending = false
+        val matches = pendingMatchingFields
+        val updatedList = formFields.toMutableList()
+
+        if (matches.isEmpty()) {
+            checkRemainingFieldsAndContinue(updatedList)
+            return
+        }
+
+        // Stagger field filling so gestures, focus, and popup selections complete smoothly without collision
+        var delayMs = 50L
+        for (i in matches.indices) {
+            val (field, value) = matches[i]
+            mainHandler.postDelayed({
+                RSTAccessibilityService.fillField(field.id, value)
+                val idx = updatedList.indexOfFirst { it.id == field.id }
+                if (idx >= 0) {
+                    updatedList[idx] = field.copy(currentValue = value)
+                }
+            }, delayMs)
+
+            delayMs += when (field.kind) {
+                FieldKind.SELECT -> 450L
+                FieldKind.RADIO -> 300L
+                else -> 200L
+            }
+        }
+
+        // Once all fields are populated, play confirmation chime and continue to remaining fields
+        mainHandler.postDelayed({
+            formFields = updatedList
+            RSTSoundEffects.playSuccess()
+
+            val filledCount = updatedList.count { it.isFilled }
+            val progressPercent = if (updatedList.isNotEmpty()) (filledCount * 100) / updatedList.size else 100
+            currentHistoryId?.let { histId ->
+                val items = FormHistoryStorage.getHistory(applicationContext)
+                val curr = items.find { it.id == histId }
+                if (curr != null) {
+                    FormHistoryStorage.updateHistoryItem(
+                        applicationContext,
+                        curr.copy(
+                            progressPercent = progressPercent,
+                            filledFieldsCount = filledCount,
+                            status = if (progressPercent == 100) "Completed" else "In Progress"
+                        )
+                    )
+                }
+            }
+
+            checkRemainingFieldsAndContinue(updatedList, matches.size)
+        }, delayMs + 100L)
+    }
+
+    private fun checkRemainingFieldsAndContinue(updatedList: List<FormField>, autofilledCount: Int = 0) {
+        val remainingIndices = updatedList.indices.filter { !updatedList[it].isFilled }
+        if (remainingIndices.isEmpty()) {
+            finishForm()
+        } else {
+            val nextIndex = remainingIndices.first()
+            currentFieldIndex = nextIndex
+            val nextField = updatedList[nextIndex]
+            val lang = if (isHindi) "hi-IN" else "en-IN"
+            val msg = if (isHindi) {
+                if (autofilledCount > 0) {
+                    "मैंने $autofilledCount फ़ील्ड भर दिए हैं! अब शेष ${remainingIndices.size} प्रश्नों को भरते हैं। सबसे पहले, " + FormmateEngine.generateHumanPrompt(nextField, lang)
+                } else {
+                    FormmateEngine.generateHumanPrompt(nextField, lang)
+                }
+            } else {
+                if (autofilledCount > 0) {
+                    "Autofilled $autofilledCount fields! Now let's fill the remaining ${remainingIndices.size} fields together. First, " + FormmateEngine.generateHumanPrompt(nextField, lang)
+                } else {
+                    FormmateEngine.generateHumanPrompt(nextField, lang)
+                }
+            }
+            currentPrompt = msg
+            speakAssistant(msg)
+        }
+    }
+
+    /**
+     * User declined autofill; proceeds with regular step-by-step filling.
+     */
+    fun declineProfileAutofill() {
+        isProfileConfirmationPending = false
+        pendingMatchingFields = emptyList()
+        currentFieldIndex = 0
+        val firstField = formFields.firstOrNull() ?: return
+        val lang = if (isHindi) "hi-IN" else "en-IN"
+        val msg = if (isHindi) {
+            "ठीक है, हम सभी विवरण एक-एक करके भरेंगे। सबसे पहले, " + FormmateEngine.generateHumanPrompt(firstField, lang)
+        } else {
+            "Okay, let's fill out the form together step-by-step. First, " + FormmateEngine.generateHumanPrompt(firstField, lang)
+        }
+        currentPrompt = msg
+        speakAssistant(msg)
     }
 
     private fun startConversationalLoop() {
@@ -309,9 +448,9 @@ class AssistantOverlayService : LifecycleService(), SavedStateRegistryOwner, Vie
         val firstField = formFields[currentFieldIndex]
         val lang = if (isHindi) "hi-IN" else "en-IN"
         val welcome = if (isHindi) {
-            "नमस्ते! मैं Hey RST हूँ। चलिए मिलकर यह फ़ॉर्म भरते हैं। सबसे पहले, " + FormmateEngine.generateHumanPrompt(firstField, lang)
+            "नमस्ते! मैं RST का Formate AI हूँ, आपका फॉर्म सहायक। चलिए मिलकर यह फ़ॉर्म भरते हैं! सबसे पहले, " + FormmateEngine.generateHumanPrompt(firstField, lang)
         } else {
-            "Hello! I'm Hey RST, your form companion. Let's fill out this form together! First, " + FormmateEngine.generateHumanPrompt(firstField, lang)
+            "Hello! I'm Formate AI by RST, your form companion. Let's fill out this form together! First, " + FormmateEngine.generateHumanPrompt(firstField, lang)
         }
         currentPrompt = welcome
         speakAssistant(welcome)
@@ -412,6 +551,26 @@ class AssistantOverlayService : LifecycleService(), SavedStateRegistryOwner, Vie
         stopInactivityWatchdog()
         conversationState = ConversationState.PROCESSING
 
+        // Profile Confirmation Intercept (User answering "Shall I autofill...?")
+        if (isProfileConfirmationPending) {
+            val bool = FormmateEngine.parseBooleanAnswer(rawText)
+            val lower = rawText.lowercase().trim()
+            if (bool == true || lower.contains("autofill") || lower.contains("fill") || lower.contains("sure") || lower.contains("ok") || lower.contains("yes") || lower.contains("proceed") || lower.contains("haan") || lower.contains("haa")) {
+                acceptProfileAutofill()
+            } else if (bool == false || lower.contains("manual") || lower.contains("no") || lower.contains("don't") || lower.contains("dont") || lower.contains("cancel") || lower.contains("nahi") || lower.contains("na")) {
+                declineProfileAutofill()
+            } else {
+                val retryPrompt = if (isHindi) {
+                    "कृपया प्रोफ़ाइल विवरण स्वतः भरने के लिए 'हाँ' कहें, या मैन्युअल भरने के लिए 'ना' कहें।"
+                } else {
+                    "Please say 'yes' to autofill from your profile, or 'no' to fill manually."
+                }
+                currentPrompt = retryPrompt
+                speakAssistant(retryPrompt)
+            }
+            return
+        }
+
         // 1. Check for Voice Control Commands
         val command = FormmateEngine.recognizeCommand(rawText)
         if (command != null) {
@@ -451,20 +610,31 @@ class AssistantOverlayService : LifecycleService(), SavedStateRegistryOwner, Vie
         updatedList[currentFieldIndex] = activeField.copy(currentValue = normalizedValue)
         formFields = updatedList
 
-        val progressPercent = if (formFields.isNotEmpty()) ((currentFieldIndex + 1) * 100) / formFields.size else 100
+        val filledCount = updatedList.count { it.isFilled }
+        val progressPercent = if (formFields.isNotEmpty()) (filledCount * 100) / formFields.size else 100
         currentHistoryId?.let { hId ->
             val items = FormHistoryStorage.getHistory(applicationContext)
             val curr = items.find { it.id == hId }
             if (curr != null) {
-                FormHistoryStorage.updateHistoryItem(applicationContext, curr.copy(progressPercent = progressPercent))
+                FormHistoryStorage.updateHistoryItem(
+                    applicationContext,
+                    curr.copy(
+                        progressPercent = progressPercent,
+                        filledFieldsCount = filledCount,
+                        totalFieldsCount = formFields.size
+                    )
+                )
             }
         }
 
-        // 6. Advance to next field or finish
-        val nextIndex = currentFieldIndex + 1
-        if (nextIndex < formFields.size) {
-            currentFieldIndex = nextIndex
-            val nextField = formFields[nextIndex]
+        // 6. Advance to next UNFILLED field or finish
+        val nextUnfilledIndex = (currentFieldIndex + 1 until formFields.size).firstOrNull {
+            !formFields[it].isFilled
+        } ?: formFields.indices.firstOrNull { !formFields[it].isFilled }
+
+        if (nextUnfilledIndex != null) {
+            currentFieldIndex = nextUnfilledIndex
+            val nextField = formFields[nextUnfilledIndex]
             val lang = if (isHindi) "hi-IN" else "en-IN"
             val confirmation = FormmateEngine.generateConfirmationMessage(activeField, normalizedValue, nextField, lang)
             currentPrompt = confirmation
@@ -538,8 +708,11 @@ class AssistantOverlayService : LifecycleService(), SavedStateRegistryOwner, Vie
                 speakAssistant(p)
             }
             VoiceCommand.SKIP, VoiceCommand.NEXT_QUESTION -> {
-                val nextIdx = currentFieldIndex + 1
-                if (nextIdx < formFields.size) {
+                val nextIdx = (currentFieldIndex + 1 until formFields.size).firstOrNull {
+                    formFields[it].currentValue.isBlank()
+                } ?: (currentFieldIndex + 1).takeIf { it < formFields.size }
+
+                if (nextIdx != null && nextIdx < formFields.size) {
                     currentFieldIndex = nextIdx
                     val active = formFields[nextIdx]
                     val lang = if (isHindi) "hi-IN" else "en-IN"
@@ -579,17 +752,34 @@ class AssistantOverlayService : LifecycleService(), SavedStateRegistryOwner, Vie
         conversationState = ConversationState.COMPLETED
         RSTSoundEffects.playComplete()
 
+        val filledCount = formFields.count { it.isFilled }
+        currentHistoryId?.let { hId ->
+            val items = FormHistoryStorage.getHistory(applicationContext)
+            val curr = items.find { it.id == hId }
+            if (curr != null) {
+                FormHistoryStorage.updateHistoryItem(
+                    applicationContext,
+                    curr.copy(
+                        status = "Completed",
+                        progressPercent = 100,
+                        filledFieldsCount = filledCount,
+                        totalFieldsCount = formFields.size
+                    )
+                )
+            }
+        }
+
         val completionMsg = if (isHindi) {
-            "बहुत बढ़िया! सभी फ़ील्ड भर दिए गए हैं। कृपया पृष्ठ पर अपने विवरणों की समीक्षा करें और स्वयं सबमिट करें।"
+            "बहुत बढ़िया! सभी फ़ील्ड सफलतापूर्वक भर दिए गए हैं। कृपया पृष्ठ पर अपने विवरणों की समीक्षा करें और सबमिट करें।"
         } else {
-            "All fields have been filled! Please review your answers on the page and submit when ready."
+            "All tasks completed successfully! Please review your answers on the webpage and tap Submit."
         }
         currentPrompt = completionMsg
         speakAssistant(completionMsg)
 
         mainHandler.postDelayed({
             hideOverlayUI()
-        }, 6000L)
+        }, 7000L)
     }
 
     private fun resetInactivityWatchdog() {
@@ -643,6 +833,10 @@ class AssistantOverlayService : LifecycleService(), SavedStateRegistryOwner, Vie
                         lastConfirmedValue = lastConfirmedValue,
                         micVolumeRms = micVolumeRms,
                         isHindi = isHindi,
+                        isProfileConfirmationPending = isProfileConfirmationPending,
+                        pendingAutofillCount = pendingMatchingFields.size,
+                        onAcceptProfileAutofill = { acceptProfileAutofill() },
+                        onDeclineProfileAutofill = { declineProfileAutofill() },
                         onHeroTap = {
                             if (conversationState == ConversationState.LISTENING) {
                                 stopAnswerListening()

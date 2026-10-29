@@ -1,8 +1,11 @@
 package com.rst.heyrst.accessibility
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.GestureDescription
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Path
+import android.graphics.Rect
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -16,22 +19,23 @@ import com.rst.heyrst.model.FieldKind
 import com.rst.heyrst.model.FormField
 import com.rst.heyrst.model.OptionItem
 import com.rst.heyrst.model.SemanticType
+import com.rst.heyrst.model.isPlaceholderValue
 import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Android Accessibility Service for Hey RST / Formmate.
+ * Android Accessibility Service for Formate AI (by RST).
  *
  * Capabilities:
  * 1. Strictly filters out browser UI (Omnibox, search bars, URL bars, toolbar, tabs).
- * 2. Scans web content for:
- *    - Text inputs & textareas
- *    - Date of Birth & date pickers (<input type="date">)
- *    - Dropdown menus (<select>, comboboxes, pop-up buttons, spinners)
- *    - Radio button groups (grouped under unified category with individual option dispatch)
- *    - Checkboxes / Agree tick boxes (resolving preceding/following labels & clicking wrappers)
- * 3. Takes real-time screen thumbnails on form activation for bento grid history (API 30+).
+ * 2. Physical hardware touch gestures (dispatchGesture) to reliably click:
+ *    - Checkboxes / Agree tick boxes (toggling even custom CSS/hidden inputs)
+ *    - Radio buttons (tapping exact option coordinates)
+ *    - Dropdown menus (<select> pop-up buttons, selecting options across multi-window dialogs)
+ *    - Date of Birth pickers (<input type="date">)
+ * 3. Scans real active webpage titles for form filling history.
+ * 4. Takes real-time screen thumbnails on form activation for bento grid history (API 30+).
  */
 class RSTAccessibilityService : AccessibilityService() {
 
@@ -49,6 +53,64 @@ class RSTAccessibilityService : AccessibilityService() {
         private val optionNodeRegistry = ConcurrentHashMap<String, AccessibilityNodeInfo>()
 
         private val mainHandler = Handler(Looper.getMainLooper())
+
+        /**
+         * Dispatches a real hardware touch tap at the specified screen coordinates.
+         * Bypasses all virtual DOM and Chrome accessibility action absorption!
+         */
+        fun dispatchTouchTap(x: Float, y: Float, onComplete: ((Boolean) -> Unit)? = null): Boolean {
+            val service = instance ?: return false
+            if (x <= 0f || y <= 0f) return false
+            val path = Path().apply {
+                moveTo(x, y)
+            }
+            val stroke = GestureDescription.StrokeDescription(path, 0, 50)
+            val gesture = GestureDescription.Builder().addStroke(stroke).build()
+            return service.dispatchGesture(gesture, object : GestureResultCallback() {
+                override fun onCompleted(gestureDescription: GestureDescription?) {
+                    onComplete?.invoke(true)
+                }
+                override fun onCancelled(gestureDescription: GestureDescription?) {
+                    onComplete?.invoke(false)
+                }
+            }, null)
+        }
+
+        /**
+         * Real hardware touch tap on the exact screen coordinates of a node.
+         * Falls back to parent/wrapper container if node has zero dimensions.
+         */
+        fun clickNodePhysically(node: AccessibilityNodeInfo): Boolean {
+            node.refresh()
+            val rect = Rect()
+            node.getBoundsInScreen(rect)
+
+            // If node bounds are valid, perform real hardware touch tap!
+            if (rect.width() > 0 && rect.height() > 0) {
+                dispatchTouchTap(rect.exactCenterX(), rect.exactCenterY())
+            } else {
+                // Check parent bounds if node itself is zero-sized (common in custom web checkboxes)
+                node.parent?.let { p ->
+                    val pRect = Rect()
+                    p.getBoundsInScreen(pRect)
+                    if (pRect.width() > 0 && pRect.height() > 0) {
+                        dispatchTouchTap(pRect.exactCenterX(), pRect.exactCenterY())
+                    }
+                }
+            }
+
+            // Also invoke accessibility action for dual-layer assurance
+            if (node.isClickable) {
+                node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            } else {
+                node.parent?.let { p ->
+                    if (p.isClickable) {
+                        p.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                    }
+                }
+            }
+            return true
+        }
 
         /**
          * Takes a screenshot of the active screen and saves it as a thumbnail image.
@@ -101,6 +163,70 @@ class RSTAccessibilityService : AccessibilityService() {
             } else {
                 onComplete(null)
             }
+        }
+
+        /**
+         * Extracts the real webpage name/heading from Chrome for history cards.
+         */
+        fun getActiveWebpageTitle(): String {
+            val service = instance ?: return "Web Form"
+            val root = service.rootInActiveWindow ?: return "Web Form"
+
+            // 1. Search inside web content container for prominent <h1> or form title
+            val webContainer = findWebContentContainer(root)
+            if (webContainer != null) {
+                fun findHeading(n: AccessibilityNodeInfo, depth: Int): String? {
+                    if (depth > 6) return null
+                    val txt = n.text?.toString()?.trim() ?: ""
+                    val role = AccessibilityNodeInfoCompat.wrap(n).roleDescription?.toString() ?: ""
+                    if (role.contains("heading", ignoreCase = true) && txt.isNotBlank() && txt.length in 4..60) {
+                        return txt
+                    }
+                    if (txt.isNotBlank() && txt.length in 5..50 && !isBrowserChromeElement(n)) {
+                        if (txt.contains("Application", ignoreCase = true) ||
+                            txt.contains("Form", ignoreCase = true) ||
+                            txt.contains("Registration", ignoreCase = true) ||
+                            txt.contains("Admission", ignoreCase = true) ||
+                            txt.contains("Verification", ignoreCase = true) ||
+                            txt.contains("Portal", ignoreCase = true)
+                        ) {
+                            return txt
+                        }
+                    }
+                    for (i in 0 until n.childCount) {
+                        n.getChild(i)?.let {
+                            val h = findHeading(it, depth + 1)
+                            if (h != null) return h
+                        }
+                    }
+                    return null
+                }
+                val h = findHeading(webContainer, 0)
+                if (!h.isNullOrBlank()) return h
+            }
+
+            // 2. Search Chrome's tab title or window title
+            fun findTabTitle(n: AccessibilityNodeInfo, depth: Int): String? {
+                if (depth > 8) return null
+                val resId = n.viewIdResourceName?.lowercase() ?: ""
+                if (resId.contains("title") || resId.contains("tab_title")) {
+                    val t = n.text?.toString()?.trim()
+                    if (!t.isNullOrBlank() && t.length in 3..60 && !t.contains("chrome", ignoreCase = true)) {
+                        return t
+                    }
+                }
+                for (i in 0 until n.childCount) {
+                    n.getChild(i)?.let {
+                        val found = findTabTitle(it, depth + 1)
+                        if (found != null) return found
+                    }
+                }
+                return null
+            }
+            val tabTitle = findTabTitle(root, 0)
+            if (!tabTitle.isNullOrBlank()) return tabTitle
+
+            return "Online Application Form"
         }
 
         /**
@@ -214,12 +340,10 @@ class RSTAccessibilityService : AccessibilityService() {
                 val cdStr = node.contentDescription?.toString()?.trim() ?: ""
 
                 // 1. Radio Button Detection (Grouped together)
-                val isRadio = isCheckable && (
-                        className.contains("RadioButton", ignoreCase = true) ||
+                val isRadio = (isCheckable ||
                         roleDesc.contains("radio", ignoreCase = true) ||
                         cdStr.contains("radio", ignoreCase = true) ||
-                        textStr.contains("radio", ignoreCase = true)
-                )
+                        className.contains("RadioButton", ignoreCase = true))
 
                 if (isRadio) {
                     val groupKey = resolveRadioGroupKey(node, parent)
@@ -230,8 +354,7 @@ class RSTAccessibilityService : AccessibilityService() {
                     return
                 }
 
-                // 2. Checkbox / Agree Tick Box Detection
-                // In Chrome, checkboxes often have className = "android.view.View" and isCheckable = true
+                // 2. Checkbox / Agree / Declaration Tick Box Detection
                 val isCheckbox = (isCheckable && !isRadio) ||
                         roleDesc.contains("check", ignoreCase = true) ||
                         className.contains("CheckBox", ignoreCase = true) ||
@@ -246,10 +369,11 @@ class RSTAccessibilityService : AccessibilityService() {
                             label.contains("*") ||
                             label.contains("agree", ignoreCase = true) ||
                             label.contains("consent", ignoreCase = true) ||
+                            label.contains("declare", ignoreCase = true) ||
                             label.contains("accurate", ignoreCase = true)
 
                     val sem = FormmateEngine.inferSemanticType(label, "", node.viewIdResourceName ?: "", className)
-                    val isChecked = compatNode.isChecked
+                    val isChecked = compatNode.isChecked || node.isChecked
 
                     fields.add(
                         FormField(
@@ -274,7 +398,6 @@ class RSTAccessibilityService : AccessibilityService() {
                 }
 
                 // 3. Dropdown Menu / <select> / Combobox / Pop-up Button
-                // In Chrome on Android, HTML <select> elements have roleDescription = "pop-up button" or "combobox"!
                 val isSelect = className.contains("Spinner", ignoreCase = true) ||
                         roleDesc.contains("pop-up button", ignoreCase = true) ||
                         roleDesc.contains("pop up button", ignoreCase = true) ||
@@ -283,17 +406,17 @@ class RSTAccessibilityService : AccessibilityService() {
                         roleDesc.contains("select", ignoreCase = true) ||
                         (node.isClickable && !isCheckable && !isEditable && (
                                 textStr.startsWith("Choose", ignoreCase = true) ||
-                                textStr.startsWith("Select", ignoreCase = true) ||
-                                hintStr.startsWith("Choose", ignoreCase = true) ||
-                                hintStr.startsWith("Select", ignoreCase = true)
-                        ))
+                                        textStr.startsWith("Select", ignoreCase = true) ||
+                                        hintStr.startsWith("Choose", ignoreCase = true) ||
+                                        hintStr.startsWith("Select", ignoreCase = true)
+                                ))
 
                 if (isSelect) {
                     val fieldId = "fm-field-${nextId++}"
                     nodeRegistry[fieldId] = node
 
                     val label = resolveNodeLabel(node, parent)
-                    val currentVal = textStr
+                    val currentVal = if (isPlaceholderValue(textStr)) "" else textStr
                     val isReq = cdStr.contains("required", ignoreCase = true) || label.contains("*")
                     val sem = FormmateEngine.inferSemanticType(label, "", node.viewIdResourceName ?: "", className)
 
@@ -327,7 +450,6 @@ class RSTAccessibilityService : AccessibilityService() {
                 }
 
                 // 4. Date of Birth / Date Inputs (<input type="date">)
-                // In Chrome, date inputs may be editable or clickable pickers
                 val isDateCandidate = run {
                     val lbl = resolveNodeLabel(node, parent).lowercase()
                     val lowerTxt = textStr.lowercase()
@@ -354,7 +476,7 @@ class RSTAccessibilityService : AccessibilityService() {
                             kind = FieldKind.INPUT,
                             semanticType = SemanticType.DATE_OF_BIRTH,
                             required = isReq,
-                            currentValue = textStr,
+                            currentValue = if (isPlaceholderValue(textStr)) "" else textStr,
                             placeholder = if (hintStr.isNotBlank()) hintStr else "dd/mm/yyyy"
                         )
                     )
@@ -381,7 +503,7 @@ class RSTAccessibilityService : AccessibilityService() {
 
                     val label = resolveNodeLabel(node, parent)
                     val hint = hintStr
-                    val currentVal = textStr
+                    val currentVal = if (isPlaceholderValue(textStr)) "" else textStr
                     val isReq = cdStr.contains("required", ignoreCase = true) || label.contains("*")
                     val sem = FormmateEngine.inferSemanticType(label, hint, node.viewIdResourceName ?: "", className)
 
@@ -451,9 +573,6 @@ class RSTAccessibilityService : AccessibilityService() {
             return fields
         }
 
-        /**
-         * Resolves the group name / category for radio buttons (e.g. "Gender")
-         */
         private fun resolveRadioGroupKey(node: AccessibilityNodeInfo, parent: AccessibilityNodeInfo?): String {
             if (parent != null) {
                 val pText = parent.text?.toString()?.trim()
@@ -472,7 +591,6 @@ class RSTAccessibilityService : AccessibilityService() {
                     }
                 }
 
-                // Check grandparent label/legend
                 val gp = parent.parent
                 if (gp != null) {
                     for (i in 0 until gp.childCount) {
@@ -524,13 +642,8 @@ class RSTAccessibilityService : AccessibilityService() {
             return "Option"
         }
 
-        /**
-         * Resolves label for Checkbox / Agree Tickbox.
-         * Looks at following sibling, preceding sibling, or enclosing parent text.
-         */
         private fun resolveCheckboxLabel(node: AccessibilityNodeInfo, parent: AccessibilityNodeInfo?): String {
             if (parent != null) {
-                // 1. Check next sibling (standard: <input type="checkbox"> <label>I confirm...</label>)
                 for (i in 0 until parent.childCount) {
                     if (parent.getChild(i) == node && i + 1 < parent.childCount) {
                         val next = parent.getChild(i + 1)
@@ -539,11 +652,9 @@ class RSTAccessibilityService : AccessibilityService() {
                     }
                 }
 
-                // 2. Check enclosing parent text
                 val pText = parent.text?.toString()?.trim()
                 if (!pText.isNullOrEmpty() && pText.length in 4..140) return pText
 
-                // 3. Check preceding sibling
                 for (i in 0 until parent.childCount) {
                     if (parent.getChild(i) == node && i > 0) {
                         val prev = parent.getChild(i - 1)
@@ -559,7 +670,7 @@ class RSTAccessibilityService : AccessibilityService() {
             val text = node.text?.toString()?.trim()
             if (!text.isNullOrEmpty()) return text
 
-            return "I confirm that the information I entered is accurate."
+            return "I declare that the information provided is accurate."
         }
 
         private fun resolveNodeLabel(node: AccessibilityNodeInfo, parent: AccessibilityNodeInfo?): String {
@@ -570,7 +681,6 @@ class RSTAccessibilityService : AccessibilityService() {
                 if (!text.isNullOrEmpty()) return text
             }
 
-            // Check preceding sibling in parent container
             if (parent != null) {
                 for (i in 0 until parent.childCount) {
                     val child = parent.getChild(i) ?: continue
@@ -585,7 +695,7 @@ class RSTAccessibilityService : AccessibilityService() {
                         }
                     }
                 }
-                // Check parent preceding sibling
+
                 val gp = parent.parent
                 if (gp != null) {
                     for (i in 0 until gp.childCount) {
@@ -644,9 +754,19 @@ class RSTAccessibilityService : AccessibilityService() {
                     OptionItem("Maharashtra", "Maharashtra"),
                     OptionItem("Other", "Other")
                 )
+                SemanticType.DISTRICT -> listOf(
+                    OptionItem("Kamrup", "Kamrup"),
+                    OptionItem("Nagaon", "Nagaon"),
+                    OptionItem("Cachar", "Cachar"),
+                    OptionItem("Dibrugarh", "Dibrugarh"),
+                    OptionItem("Jorhat", "Jorhat"),
+                    OptionItem("Sonitpur", "Sonitpur"),
+                    OptionItem("Other", "Other")
+                )
                 SemanticType.GENDER -> listOf(
                     OptionItem("Female", "Female"),
                     OptionItem("Male", "Male"),
+                    OptionItem("Other", "Other"),
                     OptionItem("Prefer not to say", "Prefer not to say")
                 )
                 SemanticType.COURSE -> listOf(
@@ -663,11 +783,12 @@ class RSTAccessibilityService : AccessibilityService() {
         }
 
         /**
-         * Fills a scanned form field on screen with high reliability across:
-         * - Text inputs / textareas
-         * - Checkbox agree tickboxes (clicks node or parent label wrapper)
-         * - Radio button groups (clicks exact matching option node)
+         * Fills a scanned form field on screen with real physical touch gestures and accessibility actions:
+         * - Checkbox agree tickboxes (clicks node or parent label wrapper physically)
+         * - Radio button groups (clicks exact matching option node coordinates physically)
          * - Dropdown selects (clicks dropdown to open native dialog, selects option, or clicks matched option)
+         * - Date of Birth (populates ISO and formatted string, or opens DatePicker)
+         * - Text inputs / textareas (focus + set text)
          */
         fun fillField(fieldId: String, value: String): Boolean {
             val node = nodeRegistry[fieldId]
@@ -676,49 +797,93 @@ class RSTAccessibilityService : AccessibilityService() {
             // 1. Radio Button Group Filling
             val targetRadioNode = optionNodeRegistry["$fieldId:$normValue"]
             if (targetRadioNode != null) {
-                return clickNodeSafely(targetRadioNode)
+                return clickNodePhysically(targetRadioNode)
             }
 
             for ((key, rNode) in optionNodeRegistry) {
                 if (key.startsWith("$fieldId:")) {
                     val optName = key.substringAfter("$fieldId:")
                     if (optName.contains(normValue) || normValue.contains(optName)) {
-                        return clickNodeSafely(rNode)
+                        return clickNodePhysically(rNode)
                     }
                 }
             }
 
             if (node == null) return false
             val compat = AccessibilityNodeInfoCompat.wrap(node)
+            val className = node.className?.toString() ?: ""
+            val roleDesc = compat.roleDescription?.toString() ?: ""
+            val isDateCandidate = node.text?.toString()?.contains("/") == true ||
+                    node.hintText?.toString()?.contains("/") == true ||
+                    roleDesc.contains("date", ignoreCase = true)
 
             return try {
                 when {
-                    // 2. Checkbox / Agree Tickbox
-                    compat.isCheckable || node.isCheckable -> {
+                    // 2. Checkbox / Agree / Declaration Tickbox
+                    compat.isCheckable || node.isCheckable || className.contains("CheckBox", ignoreCase = true) || roleDesc.contains("check", ignoreCase = true) -> {
                         val targetChecked = FormmateEngine.parseBooleanAnswer(value) ?: true
-                        val currentChecked = compat.isChecked
+                        node.refresh()
+                        val currentChecked = node.isChecked || compat.isChecked
 
                         if (currentChecked != targetChecked) {
-                            clickNodeSafely(node)
-                        } else {
-                            true
+                            clickNodePhysically(node)
+                            // If still not toggled after 180ms, tap parent <label> container
+                            mainHandler.postDelayed({
+                                node.refresh()
+                                val stillChecked = node.isChecked || AccessibilityNodeInfoCompat.wrap(node).isChecked
+                                if (stillChecked != targetChecked) {
+                                    node.parent?.let { clickNodePhysically(it) }
+                                }
+                            }, 180L)
                         }
-                    }
-
-                    // 3. Dropdown Menu / Select / Pop-up button
-                    node.className?.toString()?.contains("Spinner", ignoreCase = true) == true ||
-                            compat.roleDescription?.contains("combobox", ignoreCase = true) == true ||
-                            compat.roleDescription?.contains("pop-up button", ignoreCase = true) ||
-                            compat.roleDescription?.contains("pop up button", ignoreCase = true) ||
-                            compat.roleDescription?.contains("select", ignoreCase = true) == true -> {
-                        clickNodeSafely(node)
-                        mainHandler.postDelayed({
-                            selectOptionInActiveDialog(value)
-                        }, 250L)
                         true
                     }
 
-                    // 4. Editable Text Inputs & Textareas & Date
+                    // 3. Dropdown Menu / Select / Pop-up button (<select>)
+                    className.contains("Spinner", ignoreCase = true) ||
+                            roleDesc.contains("combobox", ignoreCase = true) ||
+                            roleDesc.contains("pop-up button", ignoreCase = true) ||
+                            roleDesc.contains("pop up button", ignoreCase = true) ||
+                            roleDesc.contains("select", ignoreCase = true) -> {
+                        clickNodePhysically(node)
+                        mainHandler.postDelayed({
+                            selectOptionInActiveDialog(value, 0)
+                        }, 200L)
+                        true
+                    }
+
+                    // 4. Date of Birth Inputs (<input type="date">)
+                    isDateCandidate || className.contains("DatePicker", ignoreCase = true) -> {
+                        val parsedIso = FormmateEngine.parseSpokenDate(value) ?: value
+                        val slashFormat = if (parsedIso.contains("-") && parsedIso.length == 10) {
+                            val parts = parsedIso.split("-")
+                            "${parts[2]}/${parts[1]}/${parts[0]}"
+                        } else value
+
+                        val argsIso = Bundle().apply {
+                            putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, parsedIso)
+                        }
+                        val okIso = node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, argsIso)
+
+                        node.refresh()
+                        if (!okIso || node.text.isNullOrBlank() || isPlaceholderValue(node.text?.toString())) {
+                            val argsSlash = Bundle().apply {
+                                putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, slashFormat)
+                            }
+                            val okSlash = node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, argsSlash)
+                            node.refresh()
+
+                            if (!okSlash || node.text.isNullOrBlank() || isPlaceholderValue(node.text?.toString())) {
+                                clickNodePhysically(node)
+                                mainHandler.postDelayed({
+                                    findAndClickDialogConfirmButton()
+                                }, 350L)
+                            }
+                        }
+                        true
+                    }
+
+                    // 5. Editable Text Inputs & Textareas
                     compat.isEditable || node.isEditable -> {
                         val args = Bundle().apply {
                             putCharSequence(
@@ -728,6 +893,7 @@ class RSTAccessibilityService : AccessibilityService() {
                         }
                         val success = node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
                         if (!success) {
+                            clickNodePhysically(node)
                             node.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
                             node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
                         }
@@ -735,7 +901,7 @@ class RSTAccessibilityService : AccessibilityService() {
                     }
 
                     else -> {
-                        clickNodeSafely(node)
+                        clickNodePhysically(node)
                     }
                 }
             } catch (e: Exception) {
@@ -744,53 +910,89 @@ class RSTAccessibilityService : AccessibilityService() {
             }
         }
 
-        private fun clickNodeSafely(node: AccessibilityNodeInfo): Boolean {
-            if (node.isClickable) {
-                val ok = node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                if (ok) return true
-            }
-
-            var current: AccessibilityNodeInfo? = node.parent
-            var depth = 0
-            while (current != null && depth < 3) {
-                if (current.isClickable) {
-                    val ok = current.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                    if (ok) return true
-                }
-                current = current.parent
-                depth++
-            }
-
-            node.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
-            return node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-        }
-
-        private fun selectOptionInActiveDialog(targetValue: String) {
-            val root = instance?.rootInActiveWindow ?: return
+        /**
+         * Searches for and clicks the target option inside multi-window dialogs (AlertDialog, ListView, Popup).
+         */
+        private fun selectOptionInActiveDialog(targetValue: String, attempt: Int) {
+            val service = instance ?: return
             val normTarget = targetValue.lowercase().trim()
 
-            fun findAndClick(curr: AccessibilityNodeInfo): Boolean {
+            fun searchInNode(curr: AccessibilityNodeInfo): AccessibilityNodeInfo? {
                 val text = curr.text?.toString()?.lowercase()?.trim() ?: ""
                 val cd = curr.contentDescription?.toString()?.lowercase()?.trim() ?: ""
 
                 if (text.isNotBlank() && (text == normTarget || text.contains(normTarget) || normTarget.contains(text))) {
-                    clickNodeSafely(curr)
-                    return true
+                    return curr
                 }
                 if (cd.isNotBlank() && (cd == normTarget || cd.contains(normTarget) || normTarget.contains(cd))) {
-                    clickNodeSafely(curr)
-                    return true
+                    return curr
                 }
 
                 for (i in 0 until curr.childCount) {
-                    curr.getChild(i)?.let {
-                        if (findAndClick(it)) return true
-                    }
+                    val child = curr.getChild(i) ?: continue
+                    val found = searchInNode(child)
+                    if (found != null) return found
                 }
-                return false
+                return null
             }
 
-            findAndClick(root)
+            var matchedNode: AccessibilityNodeInfo? = null
+
+            // 1. Search in all active interactive windows (Alert dialogs, Popup menus)
+            for (window in service.windows) {
+                val wRoot = window.root ?: continue
+                matchedNode = searchInNode(wRoot)
+                if (matchedNode != null) break
+            }
+
+            // 2. Also check active root window
+            if (matchedNode == null) {
+                val root = service.rootInActiveWindow
+                if (root != null) {
+                    matchedNode = searchInNode(root)
+                }
+            }
+
+            if (matchedNode != null) {
+                clickNodePhysically(matchedNode)
+                mainHandler.postDelayed({
+                    findAndClickDialogConfirmButton()
+                }, 150L)
+            } else if (attempt < 8) {
+                mainHandler.postDelayed({
+                    selectOptionInActiveDialog(targetValue, attempt + 1)
+                }, 150L)
+            }
+        }
+
+        /**
+         * Confirms date picker or single-choice dialogs by tapping "OK" / "Set".
+         */
+        private fun findAndClickDialogConfirmButton() {
+            val service = instance ?: return
+
+            fun findOk(curr: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+                val text = curr.text?.toString()?.lowercase()?.trim() ?: ""
+                val cd = curr.contentDescription?.toString()?.lowercase()?.trim() ?: ""
+                if (text == "ok" || text == "set" || text == "done" || cd == "ok" || cd == "set" || cd == "done") {
+                    return curr
+                }
+                for (i in 0 until curr.childCount) {
+                    val child = curr.getChild(i) ?: continue
+                    val found = findOk(child)
+                    if (found != null) return found
+                }
+                return null
+            }
+
+            for (window in service.windows) {
+                val wRoot = window.root ?: continue
+                val ok = findOk(wRoot)
+                if (ok != null) {
+                    clickNodePhysically(ok)
+                    return
+                }
+            }
         }
     }
 

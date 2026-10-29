@@ -44,6 +44,10 @@ class RSTWakeWordEngine(
     companion object {
         // Direct accent and phonetic mispronunciation variations observed in testing
         val KNOWN_WAKE_PATTERNS = listOf(
+            // Primary wake phrases: Formate AI & Hey RST
+            "formate ai", "formate", "hey formate", "hey formate ai", "format ai", "format", "hey format", "formateai",
+            "formate rst", "formate ai rst",
+
             // User-reported mispronounced phrases
             "hair style", "hairstyle", "hairsty", "hair stay", "hair", "hare style", "hare",
             "heiaresti", "hey aresti", "hey arest", "hey arrest", "hey artist", "hey artiste",

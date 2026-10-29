@@ -53,6 +53,10 @@ fun FormmateOverlayView(
     lastConfirmedValue: String?,
     micVolumeRms: Float,
     isHindi: Boolean,
+    isProfileConfirmationPending: Boolean = false,
+    pendingAutofillCount: Int = 0,
+    onAcceptProfileAutofill: () -> Unit = {},
+    onDeclineProfileAutofill: () -> Unit = {},
     onHeroTap: () -> Unit,
     onSkip: () -> Unit,
     onGoBack: () -> Unit,
@@ -60,12 +64,13 @@ fun FormmateOverlayView(
     onSubmit: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    val statusText = when (state) {
-        ConversationState.SPEAKING -> if (isHindi) "Speaking..." else "Speaking..."
-        ConversationState.LISTENING -> if (isHindi) "Listening..." else "Listening..."
-        ConversationState.PROCESSING -> "Thinking..."
-        ConversationState.WAITING_FOR_TAP -> "Tap to speak..."
-        ConversationState.COMPLETED -> "Done"
+    val statusText = when {
+        isProfileConfirmationPending -> if (isHindi) "प्रोफ़ाइल..." else "Autofill?"
+        state == ConversationState.SPEAKING -> if (isHindi) "Speaking..." else "Speaking..."
+        state == ConversationState.LISTENING -> if (isHindi) "Listening..." else "Listening..."
+        state == ConversationState.PROCESSING -> "Thinking..."
+        state == ConversationState.WAITING_FOR_TAP -> "Tap to speak..."
+        state == ConversationState.COMPLETED -> "Done"
         else -> "Ready"
     }
 
@@ -79,8 +84,17 @@ fun FormmateOverlayView(
     val percent = (progressFraction * 100).toInt()
 
     // Title and localized sub-prompts
-    val bilingualTitle = FormmateEngine.generateBilingualTitle(activeField)
-    val localizedSubPrompt = FormmateEngine.generateLocalizedSubPrompt(activeField)
+    val bilingualTitle = if (isProfileConfirmationPending) {
+        if (isHindi) "सहेजा गया प्रोफ़ाइल मिला" else "Use Saved Profile / সংরক্ষিত প্রোফাইল"
+    } else {
+        FormmateEngine.generateBilingualTitle(activeField)
+    }
+
+    val localizedSubPrompt = if (isProfileConfirmationPending) {
+        if (isHindi) "विवरण स्वतः भरने के लिए 'हाँ' कहें" else "Tap below or say 'Yes' to autofill"
+    } else {
+        FormmateEngine.generateLocalizedSubPrompt(activeField)
+    }
 
     // Outer compact card container
     Card(
@@ -125,9 +139,9 @@ fun FormmateOverlayView(
 
                 Spacer(modifier = Modifier.width(10.dp))
 
-                // Title: Hey RST
+                // Title: Formate AI
                 Text(
-                    text = "Hey RST",
+                    text = "Formate AI",
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp,
                     color = Color(0xFF0F172A)
@@ -175,37 +189,40 @@ fun FormmateOverlayView(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // 2. Bold Field Title: e.g. "Full name / সম্পূর্ণ নাম *"
-            Text(
-                text = bilingualTitle,
-                fontWeight = FontWeight.Bold,
-                fontSize = 17.sp,
-                color = Color(0xFF0F172A),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            Spacer(modifier = Modifier.height(2.dp))
-
-            // 3. Spoken Question Prompt: "What is your full name?"
-            Text(
-                text = assistantPrompt,
-                fontWeight = FontWeight.Medium,
-                fontSize = 14.5.sp,
-                color = Color(0xFF1E293B),
-                lineHeight = 19.sp
-            )
-
-            // 4. Vernacular Subtitle: "আপোনার সম্পূর্ণ নাম কি?"
-            if (localizedSubPrompt.isNotBlank()) {
-                Spacer(modifier = Modifier.height(2.dp))
+            if (state == ConversationState.COMPLETED) {
+                CelebrationSuccessView(onDismiss = onDismiss)
+            } else {
+                // 2. Bold Field Title: e.g. "Full name / সম্পূর্ণ নাম *"
                 Text(
-                    text = localizedSubPrompt,
-                    fontWeight = FontWeight.Normal,
-                    fontSize = 12.5.sp,
-                    color = Color(0xFF475569)
+                    text = bilingualTitle,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 17.sp,
+                    color = Color(0xFF0F172A),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
-            }
+
+                Spacer(modifier = Modifier.height(2.dp))
+
+                // 3. Spoken Question Prompt: "What is your full name?"
+                Text(
+                    text = assistantPrompt,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 14.5.sp,
+                    color = Color(0xFF1E293B),
+                    lineHeight = 19.sp
+                )
+
+                // 4. Vernacular Subtitle: "আপোনার সম্পূর্ণ নাম কি?"
+                if (localizedSubPrompt.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = localizedSubPrompt,
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 12.5.sp,
+                        color = Color(0xFF475569)
+                    )
+                }
 
             Spacer(modifier = Modifier.height(10.dp))
 
@@ -229,65 +246,117 @@ fun FormmateOverlayView(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // 6. "Say your answer..." Capsule with Mic Icon
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(44.dp)
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(Color(0xFFEDF5FD))
-                    .border(1.dp, Color(0xFFD6E6F8), RoundedCornerShape(22.dp))
-                    .clickable(onClick = onHeroTap)
-                    .padding(horizontal = 14.dp),
-                contentAlignment = Alignment.CenterStart
-            ) {
+            // 6. Interactive Action Area: Profile Autofill Buttons OR "Say your answer..." Capsule
+            if (isProfileConfirmationPending) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // Blue Mic Vector Icon
-                    Canvas(modifier = Modifier.size(20.dp)) {
-                        val w = size.width
-                        val h = size.height
-                        val micColor = Color(0xFF2563EB)
-
-                        // Capsule body
-                        val capW = w * 0.38f
-                        val capH = h * 0.52f
-                        val capX = (w - capW) / 2f
-                        drawRoundRect(
-                            color = micColor,
-                            topLeft = Offset(capX, h * 0.08f),
-                            size = Size(capW, capH),
-                            cornerRadius = CornerRadius(capW / 2f, capW / 2f)
+                    Button(
+                        onClick = onAcceptProfileAutofill,
+                        modifier = Modifier
+                            .weight(1.3f)
+                            .height(44.dp),
+                        shape = RoundedCornerShape(22.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1D4ED8)),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
+                    ) {
+                        Text(
+                            text = "✓ Yes, Autofill ($pendingAutofillCount)",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            maxLines = 1
                         )
-                        // Arc
-                        val arcPath = Path().apply {
-                            val arcTop = h * 0.32f
-                            val arcBottom = h * 0.70f
-                            val arcLeft = (w - capW * 1.6f) / 2f
-                            val arcRight = arcLeft + capW * 1.6f
-                            moveTo(arcLeft, arcTop)
-                            lineTo(arcLeft, arcBottom - capW * 0.35f)
-                            cubicTo(arcLeft, arcBottom, arcRight, arcBottom, arcRight, arcBottom - capW * 0.35f)
-                            lineTo(arcRight, arcTop)
-                        }
-                        drawPath(arcPath, micColor, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
-                        // Stem & Base
-                        drawLine(micColor, Offset(w / 2f, h * 0.70f), Offset(w / 2f, h * 0.88f), strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
-                        drawLine(micColor, Offset(w * 0.28f, h * 0.88f), Offset(w * 0.72f, h * 0.88f), strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
                     }
 
-                    Spacer(modifier = Modifier.width(10.dp))
+                    OutlinedButton(
+                        onClick = onDeclineProfileAutofill,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp),
+                        shape = RoundedCornerShape(22.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFCBD5E1))
+                    ) {
+                        Text(
+                            text = "No, Manual",
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF475569),
+                            maxLines = 1
+                        )
+                    }
+                }
 
-                    Text(
-                        text = if (userTranscript.isNotBlank()) "\"$userTranscript\"" else "Say your answer...",
-                        color = if (userTranscript.isNotBlank()) Color(0xFF0F172A) else Color(0xFF64748B),
-                        fontSize = 13.5.sp,
-                        fontWeight = if (userTranscript.isNotBlank()) FontWeight.Medium else FontWeight.Normal,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Text(
+                    text = if (userTranscript.isNotBlank()) "\"$userTranscript\"" else "Say \"Yes\" or \"No\", or tap a button",
+                    fontSize = 12.sp,
+                    color = if (userTranscript.isNotBlank()) Color(0xFF1D4ED8) else Color(0xFF64748B),
+                    fontWeight = if (userTranscript.isNotBlank()) FontWeight.Bold else FontWeight.Normal,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp)
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(Color(0xFFEDF5FD))
+                        .border(1.dp, Color(0xFFD6E6F8), RoundedCornerShape(22.dp))
+                        .clickable(onClick = onHeroTap)
+                        .padding(horizontal = 14.dp),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        // Blue Mic Vector Icon
+                        Canvas(modifier = Modifier.size(20.dp)) {
+                            val w = size.width
+                            val h = size.height
+                            val micColor = Color(0xFF2563EB)
+
+                            // Capsule body
+                            val capW = w * 0.38f
+                            val capH = h * 0.52f
+                            val capX = (w - capW) / 2f
+                            drawRoundRect(
+                                color = micColor,
+                                topLeft = Offset(capX, h * 0.08f),
+                                size = Size(capW, capH),
+                                cornerRadius = CornerRadius(capW / 2f, capW / 2f)
+                            )
+                            // Arc
+                            val arcPath = Path().apply {
+                                val arcTop = h * 0.32f
+                                val arcBottom = h * 0.70f
+                                val arcLeft = (w - capW * 1.6f) / 2f
+                                val arcRight = arcLeft + capW * 1.6f
+                                moveTo(arcLeft, arcTop)
+                                lineTo(arcLeft, arcBottom - capW * 0.35f)
+                                cubicTo(arcLeft, arcBottom, arcRight, arcBottom, arcRight, arcBottom - capW * 0.35f)
+                                lineTo(arcRight, arcTop)
+                            }
+                            drawPath(arcPath, micColor, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
+                            // Stem & Base
+                            drawLine(micColor, Offset(w / 2f, h * 0.70f), Offset(w / 2f, h * 0.88f), strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
+                            drawLine(micColor, Offset(w * 0.28f, h * 0.88f), Offset(w * 0.72f, h * 0.88f), strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
+                        }
+
+                        Spacer(modifier = Modifier.width(10.dp))
+
+                        Text(
+                            text = if (userTranscript.isNotBlank()) "\"$userTranscript\"" else "Say your answer...",
+                            color = if (userTranscript.isNotBlank()) Color(0xFF0F172A) else Color(0xFF64748B),
+                            fontSize = 13.5.sp,
+                            fontWeight = if (userTranscript.isNotBlank()) FontWeight.Medium else FontWeight.Normal,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
 
@@ -383,6 +452,7 @@ fun FormmateOverlayView(
             }
         }
     }
+}
 }
 
 /**
@@ -529,5 +599,98 @@ private fun BottomNavAction(
             color = Color(0xFF475569),
             fontWeight = FontWeight.Medium
         )
+    }
+}
+
+/**
+ * Animated Celebration Success View displayed upon completion of all form fields:
+ * Concentric pulsing emerald rings, large glowing checkmark, confetti celebration, and completion message.
+ */
+@Composable
+fun CelebrationSuccessView(onDismiss: () -> Unit) {
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 0.95f,
+        targetValue = 1.15f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseScale"
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // Concentric pulsing glow with checkmark
+        Box(
+            modifier = Modifier.size(96.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            // Outer glow ring
+            Box(
+                modifier = Modifier
+                    .size((88 * pulseScale).dp)
+                    .background(Color(0xFF10B981).copy(alpha = 0.18f), CircleShape)
+            )
+            // Mid glow ring
+            Box(
+                modifier = Modifier
+                    .size((74 * pulseScale).dp)
+                    .background(Color(0xFF10B981).copy(alpha = 0.32f), CircleShape)
+            )
+            // Inner solid vibrant circle
+            Box(
+                modifier = Modifier
+                    .size(58.dp)
+                    .background(
+                        Brush.linearGradient(
+                            listOf(Color(0xFF10B981), Color(0xFF059669))
+                        ),
+                        CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "✓",
+                    color = Color.White,
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Text(
+            text = "Form Completed Successfully! 🎉",
+            fontSize = 17.5.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF0F172A)
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Text(
+            text = "All fields have been filled and verified. Please review your answers on the page and tap Submit.",
+            fontSize = 13.sp,
+            color = Color(0xFF475569),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 14.dp)
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        Button(
+            onClick = onDismiss,
+            shape = RoundedCornerShape(20.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1D4ED8)),
+            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 9.dp)
+        ) {
+            Text("Done / Close Overlay", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.5.sp)
+        }
     }
 }

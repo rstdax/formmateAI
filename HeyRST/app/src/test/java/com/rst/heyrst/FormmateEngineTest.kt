@@ -96,5 +96,153 @@ class FormmateEngineTest {
         assertTrue(RSTWakeWordEngine.isWakePhraseMatch("hey r s t").first)
         assertTrue(RSTWakeWordEngine.isWakePhraseMatch("hey rusty").first)
         assertTrue(RSTWakeWordEngine.isWakePhraseMatch("aresti").first)
+
+        // Rebranded Wake Words
+        assertTrue(RSTWakeWordEngine.isWakePhraseMatch("formate ai").first)
+        assertTrue(RSTWakeWordEngine.isWakePhraseMatch("formate").first)
+        assertTrue(RSTWakeWordEngine.isWakePhraseMatch("hey formate").first)
+        assertTrue(RSTWakeWordEngine.isWakePhraseMatch("format ai").first)
+    }
+
+    @Test
+    fun testUserProfile20Fields() {
+        val p = com.rst.heyrst.model.UserProfile(
+            profileName = "Personal",
+            fullName = "Rohan Ranjan Das",
+            firstName = "Rohan",
+            lastName = "Das",
+            email = "rohan@gmail.com",
+            phone = "9876543210",
+            dateOfBirth = "04/10/2003",
+            gender = "Male",
+            guardianName = "Guardian Name",
+            streetAddress = "MG Road",
+            city = "Guwahati",
+            district = "Kamrup",
+            state = "Assam",
+            country = "India",
+            pincode = "781001",
+            age = "21",
+            occupation = "Student",
+            course = "BTech CSE",
+            education = "Undergraduate",
+            institution = "Gauhati University"
+        )
+        val json = p.toJson()
+        val restored = com.rst.heyrst.model.UserProfile.fromJson(json)
+        assertEquals("Personal", restored.profileName)
+        assertEquals("Rohan Ranjan Das", restored.fullName)
+        assertEquals("04/10/2003", restored.dateOfBirth)
+        assertEquals("Assam", restored.state)
+        assertEquals("781001", restored.pincode)
+        assertEquals("BTech CSE", restored.course)
+    }
+
+    @Test
+    fun testFormHistoryItemSerialization() {
+        val item = com.rst.heyrst.model.FormHistoryItem(
+            id = "test-1",
+            title = "Indian Passport Application",
+            url = "https://passportindia.gov.in",
+            dateTime = "Tue, 23 Apr, 02:30 PM",
+            timeBadge = "23 Apr",
+            status = "Completed",
+            progressPercent = 100,
+            thumbnailPath = "/sdcard/Pictures/FormateAI/thumb_1.jpg",
+            filledFieldsCount = 14,
+            totalFieldsCount = 14
+        )
+        val json = item.toJson()
+        val restored = com.rst.heyrst.model.FormHistoryItem.fromJson(json)
+        assertEquals("Indian Passport Application", restored.title)
+        assertEquals("https://passportindia.gov.in", restored.url)
+        assertEquals("Completed", restored.status)
+        assertEquals(100, restored.progressPercent)
+        assertEquals(14, restored.filledFieldsCount)
+        assertEquals(14, restored.totalFieldsCount)
+        assertEquals("/sdcard/Pictures/FormateAI/thumb_1.jpg", restored.thumbnailPath)
+    }
+
+    @Test
+    fun testProfileBatchMatchingAndRemainingFields() {
+        val profile = com.rst.heyrst.model.UserProfile(
+            profileName = "Personal",
+            fullName = "Rohan Ranjan Das",
+            email = "rohan@gmail.com",
+            phone = "9876543210",
+            dateOfBirth = "04/10/2003",
+            gender = "Male",
+            streetAddress = "House 12, MG Road",
+            district = "Kamrup",
+            state = "Assam",
+            pincode = "781001",
+            course = "" // Empty course
+        )
+
+        val scannedFields = listOf(
+            com.rst.heyrst.model.FormField("f1", "Full Name", com.rst.heyrst.model.FieldKind.INPUT, SemanticType.FULL_NAME),
+            com.rst.heyrst.model.FormField("f2", "Email Address", com.rst.heyrst.model.FieldKind.INPUT, SemanticType.EMAIL),
+            com.rst.heyrst.model.FormField("f3", "Mobile Number", com.rst.heyrst.model.FieldKind.INPUT, SemanticType.PHONE),
+            com.rst.heyrst.model.FormField("f4", "Date of Birth", com.rst.heyrst.model.FieldKind.INPUT, SemanticType.DATE_OF_BIRTH),
+            com.rst.heyrst.model.FormField("f5", "District", com.rst.heyrst.model.FieldKind.INPUT, SemanticType.DISTRICT),
+            com.rst.heyrst.model.FormField("f6", "State", com.rst.heyrst.model.FieldKind.SELECT, SemanticType.STATE),
+            com.rst.heyrst.model.FormField("f7", "Residential Address", com.rst.heyrst.model.FieldKind.TEXTAREA, SemanticType.ADDRESS),
+            com.rst.heyrst.model.FormField("f8", "PIN Code", com.rst.heyrst.model.FieldKind.INPUT, SemanticType.PINCODE),
+            com.rst.heyrst.model.FormField("f9", "Preferred Course", com.rst.heyrst.model.FieldKind.SELECT, SemanticType.COURSE),
+            com.rst.heyrst.model.FormField("f10", "I confirm accuracy", com.rst.heyrst.model.FieldKind.CHECKBOX, SemanticType.CONSENT)
+        )
+
+        val matches = com.rst.heyrst.model.ProfileStorage.getMatchingFields(profile, scannedFields)
+
+        // 8 matching fields must be identified for batch autofill
+        assertEquals(8, matches.size)
+        assertTrue(matches.any { it.first.label == "Full Name" && it.second == "Rohan Ranjan Das" })
+        assertTrue(matches.any { it.first.label == "Email Address" && it.second == "rohan@gmail.com" })
+        assertTrue(matches.any { it.first.label == "Date of Birth" && it.second == "04/10/2003" })
+        assertTrue(matches.any { it.first.label == "State" && it.second == "Assam" })
+        assertTrue(matches.any { it.first.label == "PIN Code" && it.second == "781001" })
+
+        // Checkbox and Preferred Course (empty in profile) must NOT be in batch autofill
+        assertFalse(matches.any { it.first.id == "f9" })
+        assertFalse(matches.any { it.first.id == "f10" })
+
+        // Simulate batch autofill
+        val afterAutofill = scannedFields.map { f ->
+            val matchVal = matches.find { it.first.id == f.id }?.second
+            if (matchVal != null) f.copy(currentValue = matchVal) else f
+        }
+
+        // Remaining unfilled fields to be asked one by one
+        val remaining = afterAutofill.filter { !it.isFilled }
+        assertEquals(2, remaining.size)
+        assertEquals("Preferred Course", remaining[0].label)
+        assertEquals("I confirm accuracy", remaining[1].label)
+    }
+
+    @Test
+    fun testPlaceholderValueAndFieldFilledState() {
+        assertTrue(com.rst.heyrst.model.isPlaceholderValue("Select district"))
+        assertTrue(com.rst.heyrst.model.isPlaceholderValue("Select state"))
+        assertTrue(com.rst.heyrst.model.isPlaceholderValue("dd/mm/yyyy"))
+        assertTrue(com.rst.heyrst.model.isPlaceholderValue("yyyy-mm-dd"))
+        assertTrue(com.rst.heyrst.model.isPlaceholderValue("Choose an option"))
+        assertTrue(com.rst.heyrst.model.isPlaceholderValue(""))
+        assertTrue(com.rst.heyrst.model.isPlaceholderValue(null))
+
+        assertFalse(com.rst.heyrst.model.isPlaceholderValue("Kamrup"))
+        assertFalse(com.rst.heyrst.model.isPlaceholderValue("04/10/2003"))
+        assertFalse(com.rst.heyrst.model.isPlaceholderValue("Rohan Ranjan Das"))
+
+        val fieldWithPlaceholder = com.rst.heyrst.model.FormField(
+            id = "f_test",
+            label = "District",
+            kind = com.rst.heyrst.model.FieldKind.SELECT,
+            semanticType = SemanticType.DISTRICT,
+            currentValue = "Select district"
+        )
+        assertFalse(fieldWithPlaceholder.isFilled)
+
+        val fieldFilled = fieldWithPlaceholder.copy(currentValue = "Kamrup")
+        assertTrue(fieldFilled.isFilled)
     }
 }

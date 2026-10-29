@@ -62,7 +62,27 @@ data class FormField(
     val placeholder: String = "",
     val options: List<OptionItem> = emptyList(),
     val confidence: Float = 0.8f
-)
+) {
+    val isFilled: Boolean
+        get() = currentValue.isNotBlank() && !isPlaceholderValue(currentValue)
+}
+
+/**
+ * Checks if a string represents an unselected placeholder (e.g. "Select district", "dd/mm/yyyy")
+ */
+fun isPlaceholderValue(text: String?): Boolean {
+    if (text.isNullOrBlank()) return true
+    val t = text.trim().lowercase()
+    return t.startsWith("select") ||
+            t.startsWith("choose") ||
+            t == "dd/mm/yyyy" ||
+            t == "yyyy-mm-dd" ||
+            t == "mm/dd/yyyy" ||
+            t == "dd-mm-yyyy" ||
+            t == "-- select --" ||
+            t == "none" ||
+            t == "null"
+}
 
 /**
  * 10-state conversation state machine matching Formmate AI specification
