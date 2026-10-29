@@ -18,6 +18,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -37,6 +38,7 @@ class MainActivity : ComponentActivity() {
     private var hasAudioPermission by mutableStateOf(false)
     private var hasOverlayPermission by mutableStateOf(false)
     private var hasAccessibilityPermission by mutableStateOf(false)
+    private var isSystemActivated by mutableStateOf(false)
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -49,6 +51,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         refreshPermissionStates()
 
+        // Read saved active preference
+        val prefs = getSharedPreferences("heyrst_prefs", Context.MODE_PRIVATE)
+        isSystemActivated = prefs.getBoolean("is_system_activated", false) &&
+                hasAudioPermission && hasOverlayPermission
+
         setContent {
             HeyRSTTheme {
                 Surface(
@@ -56,6 +63,10 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     SetupDashboard(
+                        isActivated = isSystemActivated,
+                        onToggleActivated = { shouldActivate ->
+                            handleSystemToggle(shouldActivate)
+                        },
                         hasAudio = hasAudioPermission,
                         hasOverlay = hasOverlayPermission,
                         hasAccessibility = hasAccessibilityPermission,
@@ -64,10 +75,8 @@ class MainActivity : ComponentActivity() {
                         onRequestPermissions = { requestAudioAndNotificationPermissions() },
                         onRequestOverlay = { openOverlaySettings() },
                         onRequestAccessibility = { openAccessibilitySettings() },
-                        onStartService = { sendServiceAction(AssistantOverlayService.ACTION_START_LISTENING) },
                         onTriggerOverlayTest = { sendServiceAction(AssistantOverlayService.ACTION_SHOW_OVERLAY) },
-                        onTriggerDemoForm = { sendServiceAction(AssistantOverlayService.ACTION_TEST_DEMO_FORM) },
-                        onStopService = { stopService(Intent(this, AssistantOverlayService::class.java)) }
+                        onTriggerDemoForm = { sendServiceAction(AssistantOverlayService.ACTION_TEST_DEMO_FORM) }
                     )
                 }
             }
@@ -83,6 +92,29 @@ class MainActivity : ComponentActivity() {
         hasAudioPermission = checkAudioPermission()
         hasOverlayPermission = Settings.canDrawOverlays(this)
         hasAccessibilityPermission = isAccessibilityServiceEnabled(this, RSTAccessibilityService::class.java)
+    }
+
+    private fun handleSystemToggle(activate: Boolean) {
+        val prefs = getSharedPreferences("heyrst_prefs", Context.MODE_PRIVATE)
+
+        if (activate) {
+            if (!hasAudioPermission || !hasOverlayPermission) {
+                Toast.makeText(
+                    this,
+                    "Please grant Microphone and Overlay permissions first!",
+                    Toast.LENGTH_SHORT
+                ).show()
+                return
+            }
+            isSystemActivated = true
+            prefs.edit().putBoolean("is_system_activated", true).apply()
+            sendServiceAction(AssistantOverlayService.ACTION_START_LISTENING)
+        } else {
+            isSystemActivated = false
+            prefs.edit().putBoolean("is_system_activated", false).apply()
+            stopService(Intent(this, AssistantOverlayService::class.java))
+            AssistantOverlayService.engineStatus = "Deactivated (Mic Off)"
+        }
     }
 
     private fun checkAudioPermission(): Boolean {
@@ -154,6 +186,8 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun SetupDashboard(
+    isActivated: Boolean,
+    onToggleActivated: (Boolean) -> Unit,
     hasAudio: Boolean,
     hasOverlay: Boolean,
     hasAccessibility: Boolean,
@@ -162,10 +196,8 @@ fun SetupDashboard(
     onRequestPermissions: () -> Unit,
     onRequestOverlay: () -> Unit,
     onRequestAccessibility: () -> Unit,
-    onStartService: () -> Unit,
     onTriggerOverlayTest: () -> Unit,
-    onTriggerDemoForm: () -> Unit,
-    onStopService: () -> Unit
+    onTriggerDemoForm: () -> Unit
 ) {
     val scrollState = rememberScrollState()
 
@@ -193,6 +225,50 @@ fun SetupDashboard(
 
         Spacer(modifier = Modifier.height(18.dp))
 
+        // Master Switch Toggle Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isActivated) Color(0xFFEFF6FF) else MaterialTheme.colorScheme.surface
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Hey RST Listener",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = if (isActivated) "Active • Mic ON & listening for 'Hey RST'" else "Deactivated • Mic is OFF",
+                        fontSize = 12.sp,
+                        color = if (isActivated) Color(0xFF1D4ED8) else Color(0xFF64748B)
+                    )
+                }
+
+                Switch(
+                    checked = isActivated,
+                    onCheckedChange = onToggleActivated,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = Color(0xFF1D4ED8)
+                    )
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
         // Live Audio Debugger Card
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -206,7 +282,7 @@ fun SetupDashboard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Wake Word: \"Hey RST\"",
+                        text = "Engine Status",
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold
@@ -214,13 +290,13 @@ fun SetupDashboard(
                     Box(
                         modifier = Modifier
                             .background(
-                                if (engineStatus.contains("Active", ignoreCase = true)) Color(0xFF10B981) else Color(0xFF64748B),
-                                RoundedCornerShape(12.dp)
+                                if (isActivated) Color(0xFF10B981) else Color(0xFF64748B),
+                                CircleShape
                             )
                             .padding(horizontal = 8.dp, vertical = 2.dp)
                     ) {
                         Text(
-                            text = if (engineStatus.contains("Active", ignoreCase = true)) "ONLINE" else "STANDBY",
+                            text = if (isActivated) "ONLINE" else "OFFLINE",
                             color = Color.White,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold
@@ -289,24 +365,14 @@ fun SetupDashboard(
             Text(if (hasAccessibility) "✓ 3. Accessibility Service Enabled" else "3. Enable Accessibility Service (Chrome Form Sync)")
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(18.dp))
 
         Text(
-            text = "ACTIONS & TESTING",
+            text = "TESTING & PRACTICE",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.secondary,
             modifier = Modifier.align(Alignment.Start)
         )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Button(
-            onClick = onStartService,
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-        ) {
-            Text("Start \"Hey RST\" Background Listener")
-        }
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -323,16 +389,7 @@ fun SetupDashboard(
             onClick = onTriggerDemoForm,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Practice with Built-In Registration Form")
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        TextButton(
-            onClick = onStopService,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Stop Service", color = MaterialTheme.colorScheme.error)
+            Text("Practice with Registration Form Demo")
         }
     }
 }

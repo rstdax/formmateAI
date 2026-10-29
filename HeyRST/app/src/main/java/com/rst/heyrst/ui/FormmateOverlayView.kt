@@ -1,8 +1,7 @@
 package com.rst.heyrst.ui
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -15,21 +14,33 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.rst.heyrst.engine.FormmateEngine
 import com.rst.heyrst.model.ConversationState
 import com.rst.heyrst.model.FormField
+import kotlin.math.sin
 
 /**
- * Apple Liquid Glass Assistant Floating Overlay
- * Faithfully mirrors Formmate AI sidepanel design and voice feedback states.
+ * Redesigned compact assistant overlay matching the user's latest reference design:
+ * - Low-profile, compact height
+ * - Header: RST blue badge, "Hey RST", "• Listening...", and "✕"
+ * - Title & Dual Localized Prompt: "Full name / সম্পূর্ণ নাম *", "What is your full name?", "আপোনার সম্পূর্ণ নাম কি?"
+ * - Centered 9-bar colorful symmetrical waveform (speaking wave animation + voice reactive)
+ * - "Say your answer..." capsule with mic icon
+ * - Clean progress bar with "4 of 13 • 31%"
+ * - Bottom Bar: Repeat, Back, [→ Next] blue pill button, and Submit
  */
 @Composable
 fun FormmateOverlayView(
@@ -46,160 +57,163 @@ fun FormmateOverlayView(
     onSkip: () -> Unit,
     onGoBack: () -> Unit,
     onRepeat: () -> Unit,
-    onToggleLanguage: () -> Unit,
+    onSubmit: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    // Breathing pulse for SPEAKING / LISTENING states
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val breathingScale by infiniteTransition.animateFloat(
-        initialValue = 0.95f,
-        targetValue = 1.08f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "breathing"
-    )
+    val statusText = when (state) {
+        ConversationState.SPEAKING -> if (isHindi) "Speaking..." else "Speaking..."
+        ConversationState.LISTENING -> if (isHindi) "Listening..." else "Listening..."
+        ConversationState.PROCESSING -> "Thinking..."
+        ConversationState.WAITING_FOR_TAP -> "Tap to speak..."
+        ConversationState.COMPLETED -> "Done"
+        else -> "Ready"
+    }
 
-    // Spin animation for PROCESSING state
-    val spinAngle by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "spin"
-    )
-
-    // Mic reactivity scale when LISTENING
-    val micScale = if (state == ConversationState.LISTENING) {
-        1f + (micVolumeRms.coerceIn(0f, 12f) / 16f)
+    val completedCount = if (state == ConversationState.COMPLETED) {
+        maxOf(1, totalFields)
     } else {
-        breathingScale
+        (fieldIndex + 1).coerceIn(1, maxOf(1, totalFields))
     }
+    val safeTotal = maxOf(1, totalFields)
+    val progressFraction = (completedCount.toFloat() / safeTotal.toFloat()).coerceIn(0f, 1f)
+    val percent = (progressFraction * 100).toInt()
 
-    // Dynamic glow palette based on conversation state
-    val heroColors = when (state) {
-        ConversationState.SPEAKING -> listOf(Color(0xFF7C3AED), Color(0xFFA855F7), Color(0xFFC084FC)) // Radiant Amethyst
-        ConversationState.LISTENING -> listOf(Color(0xFF06B6D4), Color(0xFF0EA5E9), Color(0xFF10B981)) // Electric Cyan & Emerald
-        ConversationState.PROCESSING -> listOf(Color(0xFFF59E0B), Color(0xFFEC4899), Color(0xFF8B5CF6)) // Radiant Spin
-        ConversationState.COMPLETED -> listOf(Color(0xFF10B981), Color(0xFF059669), Color(0xFF34D399)) // Emerald Success
-        else -> listOf(Color(0xFF6366F1), Color(0xFF4F46E5), Color(0xFF818CF8)) // Idle Indigo
-    }
+    // Title and localized sub-prompts
+    val bilingualTitle = FormmateEngine.generateBilingualTitle(activeField)
+    val localizedSubPrompt = FormmateEngine.generateLocalizedSubPrompt(activeField)
 
-    val stateBadgeColor by animateColorAsState(
-        targetValue = when (state) {
-            ConversationState.SPEAKING -> Color(0xFFA855F7)
-            ConversationState.LISTENING -> Color(0xFF06B6D4)
-            ConversationState.PROCESSING -> Color(0xFFF59E0B)
-            ConversationState.COMPLETED -> Color(0xFF10B981)
-            else -> Color(0xFF94A3B8)
-        },
-        label = "badgeColor"
-    )
-
-    val stateLabel = when (state) {
-        ConversationState.SPEAKING -> if (isHindi) "बोल रहा है..." else "Speaking..."
-        ConversationState.LISTENING -> if (isHindi) "सुन रहा है..." else "Listening..."
-        ConversationState.PROCESSING -> if (isHindi) "सोच रहा है..." else "Processing..."
-        ConversationState.WAITING_FOR_TAP -> if (isHindi) "बोलने के लिए टैप करें" else "Tap to speak"
-        ConversationState.COMPLETED -> if (isHindi) "पूर्ण हुआ!" else "Completed!"
-        ConversationState.SCANNING -> if (isHindi) "फ़ॉर्म स्कैन हो रहा है..." else "Scanning form..."
-        else -> "Hey RST"
-    }
-
-    // Translucent Liquid Glass Background Card
+    // Outer compact card container
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-        shape = RoundedCornerShape(32.dp),
+            .padding(horizontal = 14.dp, vertical = 8.dp)
+            .shadow(16.dp, RoundedCornerShape(26.dp)),
+        shape = RoundedCornerShape(26.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xF20F172A) // 95% deep slate glass
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 18.dp)
+            containerColor = Color(0xFFF6FAFF) // Soft clean pale ice-blue
+        )
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .border(
-                    width = 1.2.dp,
-                    brush = Brush.verticalGradient(
-                        listOf(Color(0x66FFFFFF), Color(0x1A6366F1), Color(0x33000000))
-                    ),
-                    shape = RoundedCornerShape(32.dp)
+                    width = 1.dp,
+                    color = Color(0xFFE2EBF6),
+                    shape = RoundedCornerShape(26.dp)
                 )
-                .padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(horizontal = 18.dp, vertical = 14.dp)
         ) {
-            // Header Bar
+            // 1. Header: [RST] Hey RST       • Listening...      ✕
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Status Pill
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
+                // Circular Blue Badge "RST"
+                Box(
                     modifier = Modifier
-                        .background(Color(0x26FFFFFF), RoundedCornerShape(20.dp))
-                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                        .size(34.dp)
+                        .background(Color(0xFF1D4ED8), CircleShape),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .background(stateBadgeColor, CircleShape)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = stateLabel,
+                        text = "RST",
                         color = Color.White,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
                     )
                 }
 
+                Spacer(modifier = Modifier.width(10.dp))
+
+                // Title: Hey RST
+                Text(
+                    text = "Hey RST",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = Color(0xFF0F172A)
+                )
+
+                Spacer(modifier = Modifier.weight(1f))
+
+                // Status indicator with colored dot: • Listening...
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Language Switcher Pill
-                    TextButton(
-                        onClick = onToggleLanguage,
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                    Box(
                         modifier = Modifier
-                            .background(Color(0x266366F1), RoundedCornerShape(16.dp))
-                            .height(28.dp)
-                    ) {
-                        Text(
-                            text = if (isHindi) "EN" else "हिन्दी",
-                            color = Color(0xFFE0E7FF),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                            .size(7.dp)
+                            .background(
+                                if (state == ConversationState.LISTENING) Color(0xFF10B981) else Color(0xFF0D9488),
+                                CircleShape
+                            )
+                    )
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text(
+                        text = statusText,
+                        color = Color(0xFF0D9488),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
 
-                    Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(14.dp))
 
-                    // Close Button
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.size(28.dp)
-                    ) {
-                        Text(
-                            text = "✕",
-                            color = Color(0xFF94A3B8),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                // Dismiss "✕"
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .clickable(onClick = onDismiss),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "✕",
+                        color = Color(0xFF64748B),
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Normal
+                    )
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            // Central Iridescent Voice Hero Circle
+            // 2. Bold Field Title: e.g. "Full name / সম্পূর্ণ নাম *"
+            Text(
+                text = bilingualTitle,
+                fontWeight = FontWeight.Bold,
+                fontSize = 17.sp,
+                color = Color(0xFF0F172A),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Spacer(modifier = Modifier.height(2.dp))
+
+            // 3. Spoken Question Prompt: "What is your full name?"
+            Text(
+                text = assistantPrompt,
+                fontWeight = FontWeight.Medium,
+                fontSize = 14.5.sp,
+                color = Color(0xFF1E293B),
+                lineHeight = 19.sp
+            )
+
+            // 4. Vernacular Subtitle: "আপোনার সম্পূর্ণ নাম কি?"
+            if (localizedSubPrompt.isNotBlank()) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = localizedSubPrompt,
+                    fontWeight = FontWeight.Normal,
+                    fontSize = 12.5.sp,
+                    color = Color(0xFF475569)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // 5. Centered 9-Bar Symmetrical Waveform Visualizer
             Box(
                 modifier = Modifier
-                    .size(90.dp)
+                    .fillMaxWidth()
+                    .height(54.dp)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -207,205 +221,312 @@ fun FormmateOverlayView(
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                // Outer glowing aura
+                SymmetricalRainbowWaveform(
+                    state = state,
+                    micVolumeRms = micVolumeRms
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // 6. "Say your answer..." Capsule with Mic Icon
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp)
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(Color(0xFFEDF5FD))
+                    .border(1.dp, Color(0xFFD6E6F8), RoundedCornerShape(22.dp))
+                    .clickable(onClick = onHeroTap)
+                    .padding(horizontal = 14.dp),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    // Blue Mic Vector Icon
+                    Canvas(modifier = Modifier.size(20.dp)) {
+                        val w = size.width
+                        val h = size.height
+                        val micColor = Color(0xFF2563EB)
+
+                        // Capsule body
+                        val capW = w * 0.38f
+                        val capH = h * 0.52f
+                        val capX = (w - capW) / 2f
+                        drawRoundRect(
+                            color = micColor,
+                            topLeft = Offset(capX, h * 0.08f),
+                            size = Size(capW, capH),
+                            cornerRadius = CornerRadius(capW / 2f, capW / 2f)
+                        )
+                        // Arc
+                        val arcPath = Path().apply {
+                            val arcTop = h * 0.32f
+                            val arcBottom = h * 0.70f
+                            val arcLeft = (w - capW * 1.6f) / 2f
+                            val arcRight = arcLeft + capW * 1.6f
+                            moveTo(arcLeft, arcTop)
+                            lineTo(arcLeft, arcBottom - capW * 0.35f)
+                            cubicTo(arcLeft, arcBottom, arcRight, arcBottom, arcRight, arcBottom - capW * 0.35f)
+                            lineTo(arcRight, arcTop)
+                        }
+                        drawPath(arcPath, micColor, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
+                        // Stem & Base
+                        drawLine(micColor, Offset(w / 2f, h * 0.70f), Offset(w / 2f, h * 0.88f), strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
+                        drawLine(micColor, Offset(w * 0.28f, h * 0.88f), Offset(w * 0.72f, h * 0.88f), strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
+                    }
+
+                    Spacer(modifier = Modifier.width(10.dp))
+
+                    Text(
+                        text = if (userTranscript.isNotBlank()) "\"$userTranscript\"" else "Say your answer...",
+                        color = if (userTranscript.isNotBlank()) Color(0xFF0F172A) else Color(0xFF64748B),
+                        fontSize = 13.5.sp,
+                        fontWeight = if (userTranscript.isNotBlank()) FontWeight.Medium else FontWeight.Normal,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // 7. Progress Bar: Gradient Blue-to-Teal
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(5.dp)
+                    .clip(RoundedCornerShape(2.5.dp))
+                    .background(Color(0xFFE2E8F0))
+            ) {
                 Box(
                     modifier = Modifier
-                        .size(86.dp)
-                        .scale(micScale)
+                        .fillMaxWidth(fraction = progressFraction)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(2.5.dp))
                         .background(
-                            brush = Brush.radialGradient(heroColors),
-                            shape = CircleShape
+                            brush = Brush.horizontalGradient(
+                                listOf(Color(0xFF2563EB), Color(0xFF06B6D4))
+                            )
                         )
                 )
-
-                // Inner liquid glass core
-                Box(
-                    modifier = Modifier
-                        .size(72.dp)
-                        .rotate(if (state == ConversationState.PROCESSING) spinAngle else 0f)
-                        .clip(CircleShape)
-                        .background(Color(0x33FFFFFF))
-                        .border(2.dp, Color(0x80FFFFFF), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = if (state == ConversationState.COMPLETED) "✓" else "RST",
-                        color = Color.White,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 18.sp
-                    )
-                }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
-            // Assistant Question Bubble (Apple Liquid Glass Speech Card)
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0x331E293B)),
-                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .border(1.dp, Color(0x26FFFFFF), RoundedCornerShape(20.dp))
-                        .padding(14.dp)
-                ) {
-                    Text(
-                        text = if (isHindi) "सहायक प्रश्न" else "Assistant Prompt",
-                        color = Color(0xFFA5B4FC),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = assistantPrompt,
-                        color = Color.White,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        lineHeight = 19.sp
-                    )
-                }
-            }
+            // Status: "4 of 13 • 31%"
+            Text(
+                text = "$completedCount of $safeTotal • $percent%",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color(0xFF1E293B)
+            )
 
-            // "You Said" Live Transcript Card
-            AnimatedVisibility(visible = userTranscript.isNotBlank()) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0x2606B6D4)),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .border(1.dp, Color(0x4006B6D4), RoundedCornerShape(16.dp))
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = if (isHindi) "आपने कहा: " else "You said: ",
-                            color = Color(0xFF67E8F9),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "\"$userTranscript\"",
-                            color = Color.White,
-                            fontSize = 13.sp,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-            }
+            Spacer(modifier = Modifier.height(10.dp))
 
-            // Current Field Details Card (if active)
-            if (activeField != null) {
-                Spacer(modifier = Modifier.height(10.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color(0x1FFFFFFF), RoundedCornerShape(16.dp))
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "Field ${fieldIndex + 1} of $totalFields",
-                                color = Color(0xFF94A3B8),
-                                fontSize = 10.sp
-                            )
-                            if (activeField.required) {
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "• Required",
-                                    color = Color(0xFFF87171),
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                        Text(
-                            text = activeField.label,
-                            color = Color.White,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 13.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-
-                    // Value status pill
-                    if (lastConfirmedValue != null) {
-                        Box(
-                            modifier = Modifier
-                                .background(Color(0x3310B981), RoundedCornerShape(12.dp))
-                                .border(1.dp, Color(0xFF10B981), RoundedCornerShape(12.dp))
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Text(
-                                text = "✓ Filled",
-                                color = Color(0xFF34D399),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // Action Pills (Tap to Speak, Skip, Back, Repeat)
+            // 8. Bottom Action Bar: Repeat | Back | [→ Next] | Submit
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                AssistPillButton(
-                    text = if (state == ConversationState.LISTENING) "Pause" else "Speak",
-                    onClick = onHeroTap
-                )
-                AssistPillButton(
-                    text = "Repeat",
+                // Action 1: Repeat (Refresh Icon)
+                BottomNavAction(
+                    label = "Repeat",
+                    icon = NavIcon.REPEAT,
                     onClick = onRepeat
                 )
-                AssistPillButton(
-                    text = "Back",
+
+                // Action 2: Back (Left Arrow)
+                BottomNavAction(
+                    label = "Back",
+                    icon = NavIcon.BACK,
                     onClick = onGoBack
                 )
-                AssistPillButton(
-                    text = "Skip",
-                    onClick = onSkip
+
+                // Action 3: Blue Pill Button "→ Next"
+                Button(
+                    onClick = onSkip,
+                    shape = RoundedCornerShape(22.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF1D4ED8) // Royal Vivid Blue
+                    ),
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 9.dp),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp),
+                    modifier = Modifier.height(42.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "→",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Next",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                    }
+                }
+
+                // Action 4: Submit (Checkmark Icon)
+                BottomNavAction(
+                    label = "Submit",
+                    icon = NavIcon.SUBMIT,
+                    onClick = onSubmit
                 )
             }
         }
     }
 }
 
+/**
+ * 9-Bar Symmetrical Rainbow Waveform matching the exact screenshot:
+ * Colors: Sky Blue, Cyan, Royal Blue, Indigo, Coral Red (tallest with glow), Amber, Yellow, Green, Cyan
+ */
 @Composable
-private fun AssistPillButton(
-    text: String,
+private fun SymmetricalRainbowWaveform(
+    state: ConversationState,
+    micVolumeRms: Float
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "waveAnim")
+
+    val phase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2 * Math.PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(1100, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "phase"
+    )
+
+    // Smooth voice reaction for LISTENING state
+    val animatedRms by animateFloatAsState(
+        targetValue = if (state == ConversationState.LISTENING) micVolumeRms.coerceIn(0f, 12f) else 0f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "rmsWave"
+    )
+
+    // 9 Symmetrical Rainbow Colors from screenshot
+    val barColors = listOf(
+        Color(0xFF38BDF8), // 1. Sky Blue
+        Color(0xFF0284C7), // 2. Cyan Blue
+        Color(0xFF2563EB), // 3. Royal Blue
+        Color(0xFF4338CA), // 4. Indigo
+        Color(0xFFEF4444), // 5. Coral Red (Tallest Center Bar)
+        Color(0xFFF59E0B), // 6. Amber Orange
+        Color(0xFFEAB308), // 7. Golden Yellow
+        Color(0xFF10B981), // 8. Emerald Green
+        Color(0xFF06B6D4)  // 9. Teal Cyan
+    )
+
+    // Symmetrical base heights (middle is highest)
+    val baseHeights = listOf(14f, 22f, 32f, 40f, 48f, 40f, 32f, 22f, 14f)
+    val offsets = listOf(0.0, 0.7, 1.4, 2.1, 2.8, 3.5, 4.2, 4.9, 5.6)
+
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        for (i in barColors.indices) {
+            val height = if (state == ConversationState.SPEAKING) {
+                // Dynamic animated wave oscillation
+                val wave = sin(phase + offsets[i]).toFloat()
+                (baseHeights[i] + wave * 9f).coerceIn(10f, 52f)
+            } else if (state == ConversationState.LISTENING) {
+                // Voice adaptive expansion based on mic loudness
+                val boost = (animatedRms / 12f) * 16f * (baseHeights[i] / 48f)
+                (baseHeights[i] * 0.75f + boost).coerceIn(8f, 52f)
+            } else {
+                baseHeights[i] * 0.8f
+            }
+
+            Box(
+                modifier = Modifier
+                    .width(7.5.dp)
+                    .height(height.dp)
+                    .background(barColors[i], RoundedCornerShape(4.dp))
+            )
+        }
+    }
+}
+
+private enum class NavIcon {
+    REPEAT,
+    BACK,
+    SUBMIT
+}
+
+@Composable
+private fun BottomNavAction(
+    label: String,
+    icon: NavIcon,
     onClick: () -> Unit
 ) {
-    Button(
-        onClick = onClick,
-        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-        shape = RoundedCornerShape(18.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = Color(0x33FFFFFF)
-        ),
-        modifier = Modifier.height(34.dp)
+    Column(
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 2.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
+        Canvas(modifier = Modifier.size(20.dp)) {
+            val w = size.width
+            val h = size.height
+            val color = Color(0xFF475569)
+            val strokeW = 1.8.dp.toPx()
+
+            when (icon) {
+                NavIcon.REPEAT -> {
+                    // Circular Repeat Arrow (⟳)
+                    val arcRect = Size(w * 0.72f, h * 0.72f)
+                    val topLeft = Offset((w - arcRect.width) / 2f, (h - arcRect.height) / 2f)
+                    drawArc(
+                        color = color,
+                        startAngle = 30f,
+                        sweepAngle = 270f,
+                        useCenter = false,
+                        topLeft = topLeft,
+                        size = arcRect,
+                        style = Stroke(width = strokeW, cap = StrokeCap.Round)
+                    )
+                    // Arrow head
+                    drawLine(color, Offset(w * 0.78f, h * 0.28f), Offset(w * 0.90f, h * 0.46f), strokeWidth = strokeW, cap = StrokeCap.Round)
+                    drawLine(color, Offset(w * 0.90f, h * 0.46f), Offset(w * 0.68f, h * 0.48f), strokeWidth = strokeW, cap = StrokeCap.Round)
+                }
+                NavIcon.BACK -> {
+                    // Left Arrow (←)
+                    drawLine(color, Offset(w * 0.85f, h * 0.5f), Offset(w * 0.15f, h * 0.5f), strokeWidth = strokeW, cap = StrokeCap.Round)
+                    drawLine(color, Offset(w * 0.45f, h * 0.22f), Offset(w * 0.15f, h * 0.5f), strokeWidth = strokeW, cap = StrokeCap.Round)
+                    drawLine(color, Offset(w * 0.45f, h * 0.78f), Offset(w * 0.15f, h * 0.5f), strokeWidth = strokeW, cap = StrokeCap.Round)
+                }
+                NavIcon.SUBMIT -> {
+                    // Checkmark (✓) inside subtle circular badge
+                    val checkColor = Color(0xFF64748B)
+                    drawCircle(color = Color(0xFFE8F0FA), radius = w * 0.48f)
+                    val path = Path().apply {
+                        moveTo(w * 0.30f, h * 0.50f)
+                        lineTo(w * 0.45f, h * 0.65f)
+                        lineTo(w * 0.72f, h * 0.35f)
+                    }
+                    drawPath(path, color = checkColor, style = Stroke(width = strokeW, cap = StrokeCap.Round))
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(2.dp))
+
         Text(
-            text = text,
-            color = Color.White,
-            fontSize = 12.sp,
+            text = label,
+            fontSize = 11.5.sp,
+            color = Color(0xFF475569),
             fontWeight = FontWeight.Medium
         )
     }

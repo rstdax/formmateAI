@@ -82,4 +82,19 @@ class FormmateEngineTest {
         assertEquals(VoiceCommand.GO_BACK, FormmateEngine.recognizeCommand("go back"))
         assertEquals(VoiceCommand.STOP_LISTENING, FormmateEngine.recognizeCommand("stop assistant"))
     }
+
+    @Test
+    fun testMispronouncedWakeWords() {
+        // User-reported mispronounced phrases must all trigger wake word
+        assertTrue(RSTWakeWordEngine.isWakePhraseMatch("hair style").first)
+        assertTrue(RSTWakeWordEngine.isWakePhraseMatch("hairstyle").first)
+        assertTrue(RSTWakeWordEngine.isWakePhraseMatch("hairsty").first)
+        assertTrue(RSTWakeWordEngine.isWakePhraseMatch("hair").first)
+        assertTrue(RSTWakeWordEngine.isWakePhraseMatch("heiaresti").first)
+        assertTrue(RSTWakeWordEngine.isWakePhraseMatch("hey aresti").first)
+        assertTrue(RSTWakeWordEngine.isWakePhraseMatch("Hey RST").first)
+        assertTrue(RSTWakeWordEngine.isWakePhraseMatch("hey r s t").first)
+        assertTrue(RSTWakeWordEngine.isWakePhraseMatch("hey rusty").first)
+        assertTrue(RSTWakeWordEngine.isWakePhraseMatch("aresti").first)
+    }
 }

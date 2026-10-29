@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -99,10 +100,21 @@ class AssistantOverlayService : LifecycleService(), SavedStateRegistryOwner, Vie
     override val viewModelStore: ViewModelStore
         get() = store
 
+    private var wakeLock: PowerManager.WakeLock? = null
+
     override fun onCreate() {
         super.onCreate()
         savedStateRegistryController.performRestore(null)
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+
+        // Acquire partial wakelock to maintain reliable continuous background wake-word listening
+        try {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "HeyRST:WakeWordEngineLock")
+            wakeLock?.acquire(24 * 60 * 60 * 1000L) // Safe 24hr timeout
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
 
         initTextToSpeech()
         startForegroundServiceNotification()
@@ -585,14 +597,15 @@ class AssistantOverlayService : LifecycleService(), SavedStateRegistryOwner, Vie
                         onSkip = { handleVoiceCommand(VoiceCommand.SKIP) },
                         onGoBack = { handleVoiceCommand(VoiceCommand.GO_BACK) },
                         onRepeat = { handleVoiceCommand(VoiceCommand.REPEAT) },
-                        onToggleLanguage = {
-                            isHindi = !isHindi
-                            val active = formFields.getOrNull(currentFieldIndex)
-                            if (active != null) {
-                                val lang = if (isHindi) "hi-IN" else "en-IN"
-                                val p = FormmateEngine.generateHumanPrompt(active, lang)
-                                currentPrompt = p
-                                speakAssistant(p)
+                        onSubmit = {
+                            if (userTranscript.isNotBlank()) {
+                                handleUserResponse(userTranscript)
+                            } else {
+                                if (currentFieldIndex >= formFields.size - 1) {
+                                    finishForm()
+                                } else {
+                                    handleVoiceCommand(VoiceCommand.SKIP)
+                                }
                             }
                         },
                         onDismiss = { hideOverlayUI() }
@@ -651,6 +664,11 @@ class AssistantOverlayService : LifecycleService(), SavedStateRegistryOwner, Vie
 
     override fun onDestroy() {
         wakeWordEngine?.stop()
+        try {
+            if (wakeLock?.isHeld == true) {
+                wakeLock?.release()
+            }
+        } catch (_: Exception) {}
         stopInactivityWatchdog()
         stopAnswerListening()
         textToSpeech?.shutdown()

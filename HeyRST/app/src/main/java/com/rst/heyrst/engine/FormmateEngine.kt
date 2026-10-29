@@ -134,14 +134,14 @@ object FormmateEngine {
             .trim()
 
         val prefixes = listOf(
-            Regex("^(?:my\\s+full\\s+name\\s+is|my\\s+name\\s+is|full\\s+name\\s+is|name\\s+is|this\\s+is|i\\s+am\\s+a|i\\s+am|myself|it\\s+is)\\s+", RegexOption.IGNORE_CASE),
+            Regex("^(?:my\\s+full\\s+name\\s+is|my\\s+name\\s+is|full\\s+name\\s+is|name\\s+is|this\\s+is|i\\s+am\\s+a|i\\s+am|myself|it\\s+is|mera\\s+naam\\s+hai|mera\\s+naam|amar\\s+naam|mor\\s+naam)\\s+", RegexOption.IGNORE_CASE),
             Regex("^(?:my\\s+state\\s+is|the\\s+state\\s+is|state\\s+is|my\\s+state\\s+of\\s+residence\\s+is|i\\s+live\\s+in|i\\s+reside\\s+in|i\\s+belong\\s+to|i\\s+am\\s+from|from|state)\\s+", RegexOption.IGNORE_CASE),
-            Regex("^(?:my\\s+district\\s+is|district\\s+is|my\\s+city\\s+is|city\\s+is)\\s+", RegexOption.IGNORE_CASE),
-            Regex("^(?:my\\s+address\\s+is|address\\s+is|residential\\s+address\\s+is)\\s+", RegexOption.IGNORE_CASE),
+            Regex("^(?:my\\s+district\\s+is|district\\s+is|my\\s+city\\s+is|city\\s+is|my\\s+village\\s+is|village\\s+is|village\\s+name\\s+is|amar\\s+gaon|mera\\s+gaon)\\s+", RegexOption.IGNORE_CASE),
+            Regex("^(?:my\\s+address\\s+is|address\\s+is|residential\\s+address\\s+is|i\\s+live\\s+at)\\s+", RegexOption.IGNORE_CASE),
             Regex("^(?:my\\s+gender\\s+is|gender\\s+is|i\\s+am\\s+a\\s+candidate|i\\s+am\\s+a|i\\s+am|im\\s+a|im)\\s+", RegexOption.IGNORE_CASE),
             Regex("^(?:my\\s+date\\s+of\\s+birth\\s+is|date\\s+of\\s+birth\\s+is|my\\s+dob\\s+is|dob\\s+is|born\\s+on|born)\\s+", RegexOption.IGNORE_CASE),
-            Regex("^(?:my\\s+email\\s+is|my\\s+email\\s+address\\s+is|email\\s+is|email\\s+address\\s+is)\\s+", RegexOption.IGNORE_CASE),
-            Regex("^(?:my\\s+phone\\s+number\\s+is|phone\\s+is|my\\s+mobile\\s+number\\s+is|mobile\\s+is|contact\\s+is|number\\s+is)\\s+", RegexOption.IGNORE_CASE),
+            Regex("^(?:my\\s+email\\s+is|my\\s+email\\s+address\\s+is|my\\s+email\\s+id\\s+is|email\\s+is|email\\s+address\\s+is|email\\s+id\\s+is|email)\\s+", RegexOption.IGNORE_CASE),
+            Regex("^(?:my\\s+phone\\s+number\\s+is|phone\\s+is|my\\s+mobile\\s+number\\s+is|mobile\\s+is|contact\\s+is|number\\s+is|mera\\s+number)\\s+", RegexOption.IGNORE_CASE),
             Regex("^(?:my\\s+pin\\s+code\\s+is|pin\\s+code\\s+is|pin\\s+is|postal\\s+code\\s+is|zip\\s+is)\\s+", RegexOption.IGNORE_CASE),
             Regex("^(?:my\\s+preferred\\s+course\\s+is|preferred\\s+course\\s+is|course\\s+is|i\\s+want\\s+to\\s+study|i\\s+choose|choose|select|i\\s+prefer)\\s+", RegexOption.IGNORE_CASE),
             Regex("^(?:i\\s+choose|choose|select|option|pick|go\\s+with|set\\s+it\\s+to|make\\s+it)\\s+", RegexOption.IGNORE_CASE)
@@ -291,8 +291,36 @@ object FormmateEngine {
             }
         }
 
+        // Tier 7: Levenshtein distance phonetic/accent tolerance (for mispronounced words e.g. "Asam" -> Assam)
+        if (query.length >= 3) {
+            val fuzzyCandidates = prepared.filter { p ->
+                val dist = levenshtein(query, p.normLabel)
+                val maxLen = maxOf(query.length, p.normLabel.length)
+                val similarity = if (maxLen > 0) 1.0 - (dist.toDouble() / maxLen.toDouble()) else 0.0
+                dist <= 2 || similarity >= 0.72
+            }
+            if (fuzzyCandidates.size == 1) {
+                return OptionMatchResult(matched = fuzzyCandidates[0].original, tier = 7)
+            }
+        }
+
         val displayList = activeList.take(6).joinToString { it.label }
         return OptionMatchResult(error = "I couldn't match \"$raw\" to an available option. Options include: $displayList.")
+    }
+
+    private fun levenshtein(s1: String, s2: String): Int {
+        val m = s1.length
+        val n = s2.length
+        val dp = Array(m + 1) { IntArray(n + 1) }
+        for (i in 0..m) dp[i][0] = i
+        for (j in 0..n) dp[0][j] = j
+        for (i in 1..m) {
+            for (j in 1..n) {
+                val cost = if (s1[i - 1] == s2[j - 1]) 0 else 1
+                dp[i][j] = minOf(dp[i - 1][j] + 1, minOf(dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost))
+            }
+        }
+        return dp[m][n]
     }
 
     // --- Checkbox Negation-First Boolean Parser ---
@@ -434,18 +462,32 @@ object FormmateEngine {
         return null
     }
 
-    // --- Spoken Email Normalizer ---
+    // --- Spoken Email Normalizer (Accent & Phonetic Tolerant) ---
 
     fun parseSpokenEmail(rawInput: String?): String? {
         val text = rawInput?.trim() ?: return null
         if (text.isEmpty()) return null
 
-        val converted = text.lowercase(Locale.ROOT)
-            .replace(Regex("\\s+at\\s+"), "@")
+        var converted = text.lowercase(Locale.ROOT)
+            .replace(Regex("\\s+(?:at\\s+the\\s+rate|at\\s+rate|add\\s+the\\s+rate|attherate|at)\\s+"), "@")
             .replace(Regex("\\s+dot\\s+"), ".")
             .replace(Regex("\\s+underscore\\s+"), "_")
             .replace(Regex("\\s+dash\\s+"), "-")
             .replace(Regex("\\s+"), "")
+
+        // Accent domain corrections
+        converted = converted
+            .replace(Regex("@(?:g\\s*mail|gemale|jemal|jmail|gimal|geemail|jimail)"), "@gmail")
+            .replace(Regex("@(?:yahoo|yahu|yahoomail)"), "@yahoo")
+            .replace(Regex("@(?:outlook|out\\s*look)"), "@outlook")
+            .replace(Regex("@(?:hotmail|hot\\s*mail)"), "@hotmail")
+            .replace(Regex("(?:dot|\\.)com$"), ".com")
+            .replace(Regex("(?:dot|\\.)in$"), ".in")
+            .replace(Regex("(?:dot|\\.)co(?:dot|\\.)in$"), ".co.in")
+
+        if (converted.contains("@") && !converted.substringAfter("@").contains(".")) {
+            converted = "$converted.com"
+        }
 
         val match = Regex("[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,}").find(converted)
         return match?.value?.replace(Regex("[.,;]+$"), "")
@@ -675,5 +717,60 @@ object FormmateEngine {
         if (Regex("\\b(agree|consent|terms|declaration|accept)\\b").containsMatchIn(combined) || combined.contains("checkbox")) return SemanticType.CONSENT
 
         return SemanticType.GENERAL
+    }
+
+    /**
+     * Generates a bilingual title matching the exact design: e.g. "Full name / সম্পূর্ণ নাম *"
+     */
+    fun generateBilingualTitle(field: FormField?): String {
+        if (field == null) return "Form Field"
+        val label = field.label.ifBlank { "Field" }
+        val vernacular = when (field.semanticType) {
+            SemanticType.FULL_NAME -> "সম্পূর্ণ নাম"
+            SemanticType.FIRST_NAME -> "প্রথম নাম"
+            SemanticType.LAST_NAME -> "উপাধি"
+            SemanticType.EMAIL -> "ইমেইল ঠিকনা"
+            SemanticType.PHONE -> "মোবাইল নম্বৰ"
+            SemanticType.DATE_OF_BIRTH -> "জন্ম তাৰিখ"
+            SemanticType.DATE -> "তাৰিখ"
+            SemanticType.STATE -> "ৰাজ্য"
+            SemanticType.DISTRICT -> "জিলা"
+            SemanticType.CITY -> "চহৰ"
+            SemanticType.GENDER -> "লিংগ"
+            SemanticType.ADDRESS -> "ঠিকনা"
+            SemanticType.PINCODE -> "পিন কোড"
+            SemanticType.COURSE -> "পাঠ্যক্ৰম"
+            SemanticType.CONSENT -> "ঘোষণা"
+            else -> ""
+        }
+        val formatted = if (vernacular.isNotEmpty() && !label.contains(vernacular)) {
+            "$label / $vernacular"
+        } else {
+            label
+        }
+        return if (field.required) "$formatted *" else formatted
+    }
+
+    /**
+     * Generates vernacular sub-prompt subtitle: e.g. "আপোনার সম্পূর্ণ নাম কি?"
+     */
+    fun generateLocalizedSubPrompt(field: FormField?): String {
+        if (field == null) return ""
+        return when (field.semanticType) {
+            SemanticType.FULL_NAME -> "আপোনার সম্পূর্ণ নাম কি?"
+            SemanticType.FIRST_NAME -> "আপোনার প্রথম নাম কি?"
+            SemanticType.LAST_NAME -> "আপোনার উপাধি কি?"
+            SemanticType.EMAIL -> "আপোনার ইমেইল ঠিকনা কি?"
+            SemanticType.PHONE -> "আপোনার মোবাইল নম্বর কি?"
+            SemanticType.DATE_OF_BIRTH -> "আপোনার জন্ম তারিখ কি?"
+            SemanticType.DATE -> "তারিখটো কি হব?"
+            SemanticType.DISTRICT, SemanticType.CITY -> "আপনি কোন জিলা বা শহরে থাকেন?"
+            SemanticType.STATE -> "আপোনার রাজ্যের নাম কি?"
+            SemanticType.GENDER -> "আপোনার লিঙ্গ কি?"
+            SemanticType.PINCODE -> "আপোনার পিন কোড কি?"
+            SemanticType.ADDRESS -> "আপোনার বাসস্থানের ঠিকানা কি?"
+            SemanticType.CONSENT -> "আপনি কি এই শর্তাবলীতে সম্মত?"
+            else -> "অনুগ্রহ করে আপনার উত্তর বলুন।"
+        }
     }
 }
