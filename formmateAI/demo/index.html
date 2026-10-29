@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>FORMMATE Demo — Student Registration</title>
+  <style>
+    :root { font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #18213a; background: #f4f6fb; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px 14px; }
+    .page { max-width: 760px; margin: 0 auto; }
+    .top { display: flex; gap: 12px; align-items: center; margin-bottom: 18px; }
+    .logo { width: 45px; height: 45px; border-radius: 14px; background: #4e5be4; color: white; display: grid; place-items: center; font-size: 25px; font-weight: 900; }
+    h1 { font-size: 21px; margin: 0; }
+    .subtitle { margin: 4px 0 0; color: #778199; font-size: 13px; }
+    .card { background: white; border: 1px solid #e3e7f1; border-radius: 18px; padding: 23px; box-shadow: 0 10px 30px #24314b08; }
+    .notice { border: 1px solid #dfe3ff; background: #f0f2ff; color: #4b56ba; border-radius: 11px; padding: 11px 13px; font-size: 12px; line-height: 1.5; margin-bottom: 20px; }
+    h2 { margin: 0 0 5px; font-size: 19px; }
+    .desc { margin: 0 0 20px; color: #7a849b; font-size: 12px; }
+    form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .field { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+    .wide { grid-column: 1 / -1; }
+    label, legend { font-size: 12px; font-weight: 700; color: #35405a; }
+    label span { color: #d06b48; }
+    input, select, textarea { width: 100%; border: 1px solid #dce1ed; background: #fff; color: #25304a; border-radius: 10px; padding: 11px 12px; font: inherit; font-size: 13px; outline: 0; }
+    input:focus, select:focus, textarea:focus { border-color: #7b85f3; box-shadow: 0 0 0 3px #727df01a; }
+    fieldset { border: 1px solid #e0e4ef; border-radius: 12px; padding: 12px 14px; }
+    fieldset legend { padding: 0 5px; }
+    .options { display: flex; flex-wrap: wrap; gap: 14px; }
+    .options label { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; }
+    .options input { width: auto; }
+    .checkline { display: flex; align-items: flex-start; gap: 9px; font-weight: 500; line-height: 1.5; }
+    .checkline input { width: auto; margin-top: 2px; }
+    .actions { display: flex; justify-content: flex-end; gap: 9px; grid-column: 1 / -1; padding-top: 5px; }
+    button { border: 0; border-radius: 10px; padding: 11px 16px; font: inherit; font-size: 12px; font-weight: 750; cursor: pointer; }
+    .secondary { background: #f0f2f8; color: #57627c; }
+    .primary { background: #4e5be4; color: white; }
+    .result { display: none; grid-column: 1 / -1; background: #e9f8f1; color: #216f4e; border-radius: 10px; padding: 12px; font-size: 12px; }
+    footer { margin: 14px 0; text-align: center; color: #9aa2b2; font-size: 11px; }
+    @media(max-width: 560px) { form { grid-template-columns: 1fr; } .wide, .actions, .result { grid-column: auto; } .card { padding: 16px; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="top">
+      <div class="logo">F</div>
+      <div><h1>FORMMATE demo form</h1><p class="subtitle">A sample student registration page for local testing</p></div>
+    </div>
+    <section class="card">
+      <div class="notice"><strong>Practice only:</strong> Open the FORMMATE extension side panel, scan this page, and try voice or text answers. This demo has no server and never submits personal data.</div>
+      <h2>Student Registration</h2>
+      <p class="desc">Fields intentionally include labels, select options, radio buttons, and a consent checkbox.</p>
+      <form id="demoForm">
+        <div class="field">
+          <label for="applicant_name">Full Name <span>*</span></label>
+          <input id="applicant_name" name="applicant_name" type="text" autocomplete="name" placeholder="Enter your full name" required>
+        </div>
+        <div class="field">
+          <label for="email_address">Email Address <span>*</span></label>
+          <input id="email_address" name="email_address" type="email" autocomplete="email" placeholder="name@example.com" required>
+        </div>
+        <div class="field">
+          <label for="mobile_number">Phone Number</label>
+          <input id="mobile_number" name="mobile_number" type="tel" autocomplete="tel" placeholder="10-digit mobile number">
+        </div>
+        <div class="field">
+          <label for="birth_date">Date of Birth</label>
+          <input id="birth_date" name="birth_date" type="date" autocomplete="bday">
+        </div>
+        <div class="field">
+          <label for="district">District</label>
+          <input id="district" name="district" type="text" placeholder="e.g. Nagaon">
+        </div>
+        <div class="field">
+          <label for="state">State</label>
+          <select id="state" name="state">
+            <option value="">Choose a state</option>
+            <option>Assam</option><option>Meghalaya</option><option>Manipur</option><option>Tripura</option><option>Arunachal Pradesh</option><option>West Bengal</option><option>Other</option>
+          </select>
+        </div>
+        <fieldset class="wide">
+          <legend>Gender</legend>
+          <div class="options">
+            <label><input type="radio" name="gender" value="Female"> Female</label>
+            <label><input type="radio" name="gender" value="Male"> Male</label>
+            <label><input type="radio" name="gender" value="Prefer not to say"> Prefer not to say</label>
+          </div>
+        </fieldset>
+        <div class="field wide">
+          <label for="address">Residential Address</label>
+          <textarea id="address" name="address" rows="2" placeholder="House, street, village or locality"></textarea>
+        </div>
+        <div class="field">
+          <label for="pin_code">PIN Code</label>
+          <input id="pin_code" name="pin_code" type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="6-digit PIN code">
+        </div>
+        <div class="field">
+          <label for="course">Preferred Course</label>
+          <select id="course" name="course">
+            <option value="">Choose a course</option><option>BSc</option><option>BA</option><option>BCom</option><option>BTech</option><option>Other</option>
+          </select>
+        </div>
+        <div class="wide">
+          <label class="checkline"><input id="consent" name="consent" type="checkbox" required> I confirm that the information I entered is accurate. <span>*</span></label>
+        </div>
+        <div id="demoResult" class="result" role="status"></div>
+        <div class="actions">
+          <button class="secondary" type="reset">Reset demo form</button>
+          <button class="primary" type="submit">Demo submit (disabled)</button>
+        </div>
+      </form>
+    </section>
+    <footer>FORMMATE AI · Practice prototype · No data leaves this sample page through the demo itself</footer>
+  </main>
+  <script>
+    document.getElementById("demoForm").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const result = document.getElementById("demoResult");
+      result.style.display = "block";
+      result.textContent = "Demo only: no information was submitted or transmitted. Review your entries in FORMMATE, then close this page when finished.";
+    });
+  </script>
+</body>
+</html>

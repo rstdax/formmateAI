@@ -1,0 +1,16 @@
+{
+  "name": "formmate-ai-practice-prototype",
+  "version": "0.2.0",
+  "description": "FORMMATE AI — Voice Form Assistant (Practice Prototype)",
+  "scripts": {
+    "test": "node tests/test-core.js && node tests/test-regression.js"
+  },
+  "keywords": [
+    "formmate",
+    "chrome-extension",
+    "voice-assistant",
+    "accessibility"
+  ],
+  "author": "FORMMATE AI Team",
+  "license": "MIT"
+}
