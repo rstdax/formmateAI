@@ -41,7 +41,10 @@ import com.rst.heyrst.engine.RSTSoundEffects
 import com.rst.heyrst.model.ConversationState
 import com.rst.heyrst.model.FieldKind
 import com.rst.heyrst.model.FormField
+import com.rst.heyrst.model.FormHistoryItem
+import com.rst.heyrst.model.FormHistoryStorage
 import com.rst.heyrst.model.OptionItem
+import com.rst.heyrst.model.ProfileStorage
 import com.rst.heyrst.model.SemanticType
 import com.rst.heyrst.model.VoiceCommand
 import com.rst.heyrst.ui.FormmateOverlayView
@@ -82,6 +85,7 @@ class AssistantOverlayService : LifecycleService(), SavedStateRegistryOwner, Vie
     // Form fields model
     private var formFields by mutableStateOf<List<FormField>>(emptyList())
     private var currentFieldIndex by mutableIntStateOf(0)
+    private var currentHistoryId: String? = null
 
     // 8-Second Inactivity Watchdog
     private val inactivityRunnable = Runnable {
@@ -233,11 +237,37 @@ class AssistantOverlayService : LifecycleService(), SavedStateRegistryOwner, Vie
         // 1. Pause wake word engine while assistant overlay is interacting
         wakeWordEngine?.pause()
 
+        val prefs = getSharedPreferences("heyrst_prefs", Context.MODE_PRIVATE)
+        val lang = prefs.getString("selected_language", "en")
+        isHindi = (lang == "hi")
+
         // 2. Scan active screen for Chrome form fields
         val scanned = RSTAccessibilityService.scanActiveWindow()
         if (scanned.isNotEmpty()) {
             formFields = scanned
             currentFieldIndex = 0
+
+            // Capture screenshot thumbnail for history
+            RSTAccessibilityService.captureScreenThumbnail(applicationContext) { thumbPath ->
+                mainHandler.post {
+                    val formTitle = scanned.firstOrNull()?.let {
+                        if (it.label.isNotBlank() && it.label != "Form Field") "${it.label} Application" else "Online Registration Form"
+                    } ?: "Online Registration Form"
+
+                    val item = FormHistoryItem(
+                        title = formTitle,
+                        dateTime = "Today",
+                        timeBadge = "⚡ Just Now",
+                        status = "In Progress",
+                        progressPercent = 10,
+                        thumbnailPath = thumbPath,
+                        categoryIcon = "⚡"
+                    )
+                    currentHistoryId = item.id
+                    FormHistoryStorage.addHistoryItem(applicationContext, item)
+                }
+            }
+
             showOverlayUI()
             startConversationalLoop()
         } else {
@@ -257,6 +287,19 @@ class AssistantOverlayService : LifecycleService(), SavedStateRegistryOwner, Vie
         wakeWordEngine?.pause()
         formFields = getDemoStudentForm()
         currentFieldIndex = 0
+
+        val item = FormHistoryItem(
+            title = "Demo Student Registration",
+            dateTime = "Today",
+            timeBadge = "⚡ Demo",
+            status = "In Progress",
+            progressPercent = 10,
+            categoryIcon = "⚡",
+            isDemo = true
+        )
+        currentHistoryId = item.id
+        FormHistoryStorage.addHistoryItem(applicationContext, item)
+
         showOverlayUI()
         startConversationalLoop()
     }
@@ -408,6 +451,15 @@ class AssistantOverlayService : LifecycleService(), SavedStateRegistryOwner, Vie
         updatedList[currentFieldIndex] = activeField.copy(currentValue = normalizedValue)
         formFields = updatedList
 
+        val progressPercent = if (formFields.isNotEmpty()) ((currentFieldIndex + 1) * 100) / formFields.size else 100
+        currentHistoryId?.let { hId ->
+            val items = FormHistoryStorage.getHistory(applicationContext)
+            val curr = items.find { it.id == hId }
+            if (curr != null) {
+                FormHistoryStorage.updateHistoryItem(applicationContext, curr.copy(progressPercent = progressPercent))
+            }
+        }
+
         // 6. Advance to next field or finish
         val nextIndex = currentFieldIndex + 1
         if (nextIndex < formFields.size) {
@@ -423,6 +475,13 @@ class AssistantOverlayService : LifecycleService(), SavedStateRegistryOwner, Vie
     }
 
     private fun normalizeValueForField(field: FormField, rawInput: String): String? {
+        val norm = rawInput.lowercase().trim()
+        val activeProfile = ProfileStorage.getActiveProfile(this)
+        if (activeProfile != null && (norm.contains("profile") || norm.contains("saved") || norm.contains("my details") || norm == "yes")) {
+            val pVal = ProfileStorage.getValueForSemanticType(activeProfile, field.semanticType)
+            if (pVal != null) return pVal
+        }
+
         return when (field.kind) {
             FieldKind.CHECKBOX -> {
                 val bool = FormmateEngine.parseBooleanAnswer(rawInput)
